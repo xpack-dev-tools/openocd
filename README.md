@@ -22,9 +22,14 @@ to store the few changes that were performed in
 The changes are minimal and should not introduce functional differences:
 
 - a configure option was added to configure branding (`--enable-branding`)
-- the `src/openocd.c` was edited to display the branding string
-- the `contrib/60-openocd.rules` was simplified to avoid protection related
-  issues.
+- the `src/openocd.c` file was edited to display the branding string
+- the `contrib/60-openocd.rules` file was simplified to avoid protection 
+  related issues.
+
+## How to use
+
+Details on how to install and use **The xPack OpenOCD** are available in the
+separate [xpack-dev-tools/openocd-xpack](https://github.com/xpack-dev-tools/openocd-xpack) project.
 
 ## Support
 
