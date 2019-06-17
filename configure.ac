@@ -315,10 +315,6 @@ AC_ARG_ENABLE([gw16012],
   AS_HELP_STRING([--enable-gw16012], [Enable building support for the Gateworks GW16012 JTAG Programmer]),
   [build_gw16012=$enableval], [build_gw16012=no])
 
-AC_ARG_ENABLE([riscv],
-  AS_HELP_STRING([--enable-riscv], [Enable building support for RISC-V devices]),
-  [build_riscv=$enableval], [build_riscv=no])
-
 AC_ARG_ENABLE([branding],
   AS_HELP_STRING([--enable-branding], [Add a branding string to the greeting message]),
   [build_branding=$enableval], [build_branding=none])
@@ -565,12 +561,6 @@ AS_IF([test "x$build_gw16012" = "xyes"], [
   AC_DEFINE([BUILD_GW16012], [1], [1 if you want the Gateworks GW16012 driver.])
 ], [
   AC_DEFINE([BUILD_GW16012], [0], [0 if you don't want the Gateworks GW16012 driver.])
-])
-
-AS_IF([test "x$build_riscv" = "xyes"], [
-  AC_DEFINE([BUILD_RISCV], [1], [1 if you want support for the RISC-V devices.])
-], [
-  AC_DEFINE([BUILD_RISCV], [0], [0 if you don't want support for the RISC-V devices.])
 ])
 
 AS_IF([test "x$build_branding" = "xnone"], [
