@@ -36,3 +36,6 @@ separate [xpack-dev-tools/openocd-xpack](https://github.com/xpack-dev-tools/open
 For issues related to the OpenOCD functionality, please use the 
 [official discussion channels](http://openocd.org/discussion/).
 
+## Links
+
+- [Submitting patches to the OpenOCD Gerrit server](http://openocd.org/doc-release/doxygen/patchguide.html)
