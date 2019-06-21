@@ -53,10 +53,10 @@
 
 #ifdef PKGBLDDATE
 #define OPENOCD_VERSION	BUILD_BRANDING \
-    "Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
+    " Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
 #else
 #define OPENOCD_VERSION	BUILD_BRANDING \
-    "Open On-Chip Debugger " VERSION RELSTR
+    " Open On-Chip Debugger " VERSION RELSTR
 #endif
 
 #else
