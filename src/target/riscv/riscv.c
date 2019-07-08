@@ -271,16 +271,8 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	return ERROR_OK;
 }
 
-static void riscv_deinit_target(struct target *target)
+static void riscv_free_registers(struct target *target)
 {
-	LOG_DEBUG("riscv_deinit_target()");
-	struct target_type *tt = get_target_type(target);
-	if (tt) {
-		tt->deinit_target(target);
-		riscv_info_t *info = (riscv_info_t *) target->arch_info;
-		free(info->reg_names);
-		free(info);
-	}
 	/* Free the shared structure use for most registers. */
 	if (target->reg_cache) {
 		if (target->reg_cache->reg_list) {
@@ -293,6 +285,21 @@ static void riscv_deinit_target(struct target *target)
 		}
 		free(target->reg_cache);
 	}
+}
+
+static void riscv_deinit_target(struct target *target)
+{
+	LOG_DEBUG("riscv_deinit_target()");
+	struct target_type *tt = get_target_type(target);
+	if (tt) {
+		tt->deinit_target(target);
+		riscv_info_t *info = (riscv_info_t *) target->arch_info;
+		free(info->reg_names);
+		free(info);
+	}
+
+	riscv_free_registers(target);
+
 	target->arch_info = NULL;
 }
 
@@ -1616,7 +1623,7 @@ COMMAND_HANDLER(riscv_authdata_read)
 		uint32_t value;
 		if (r->authdata_read(target, &value) != ERROR_OK)
 			return ERROR_FAIL;
-		command_print(CMD_CTX, "0x%" PRIx32, value);
+		command_print(CMD, "0x%" PRIx32, value);
 		return ERROR_OK;
 	} else {
 		LOG_ERROR("authdata_read is not implemented for this target.");
@@ -1669,7 +1676,7 @@ COMMAND_HANDLER(riscv_dmi_read)
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], address);
 		if (r->dmi_read(target, &value, address) != ERROR_OK)
 			return ERROR_FAIL;
-		command_print(CMD_CTX, "0x%" PRIx32, value);
+		command_print(CMD, "0x%" PRIx32, value);
 		return ERROR_OK;
 	} else {
 		LOG_ERROR("dmi_read is not implemented for this target.");
@@ -2503,11 +2510,7 @@ int riscv_init_registers(struct target *target)
 {
 	RISCV_INFO(info);
 
-	if (target->reg_cache) {
-		if (target->reg_cache->reg_list)
-			free(target->reg_cache->reg_list);
-		free(target->reg_cache);
-	}
+	riscv_free_registers(target);
 
 	target->reg_cache = calloc(1, sizeof(*target->reg_cache));
 	target->reg_cache->name = "RISC-V Registers";
