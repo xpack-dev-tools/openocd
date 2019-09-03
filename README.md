@@ -15,6 +15,7 @@ to store the few changes that were performed in
 ## Branches
 
 - `xpack` - the updated content, used during the builds
+- `xpack-develop` - the updated content, used during the development
 - `master` - the original content, it follows the upstream master.
 
 ## Changes
@@ -36,6 +37,12 @@ separate [xpack-dev-tools/openocd-xpack](https://github.com/xpack-dev-tools/open
 For issues related to the OpenOCD functionality, please use the 
 [official discussion channels](http://openocd.org/discussion/).
 
-## Links
+## Contributing & patches
 
-- [Submitting patches to the OpenOCD Gerrit server](http://openocd.org/doc-release/doxygen/patchguide.html)
+This repository plans to follow the upstream OpenOCD repository; if you have
+patches that fix various issues, please **do not** submit them here
+since they'll most probably be ignored.
+
+Instead, submit them to the upstream Gerrit server; for details please see the 
+[Submitting patches to the OpenOCD Gerrit server](http://openocd.org/doc-release/doxygen/patchguide.html) page.
+
