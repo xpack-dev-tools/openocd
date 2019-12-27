@@ -94,6 +94,7 @@ extern struct target_type cortexr4_target;
 extern struct target_type arm11_target;
 extern struct target_type ls1_sap_target;
 extern struct target_type mips_m4k_target;
+extern struct target_type mips_mips64_target;
 extern struct target_type avr_target;
 extern struct target_type dsp563xx_target;
 extern struct target_type dsp5680xx_target;
@@ -147,6 +148,7 @@ static struct target_type *target_types[] = {
 	&esirisc_target,
 #if BUILD_TARGET64
 	&aarch64_target,
+	&mips_mips64_target,
 #endif
 	NULL,
 };
@@ -1215,7 +1217,24 @@ int target_get_gdb_reg_list(struct target *target,
 		struct reg **reg_list[], int *reg_list_size,
 		enum target_register_class reg_class)
 {
-	return target->type->get_gdb_reg_list(target, reg_list, reg_list_size, reg_class);
+	int result = target->type->get_gdb_reg_list(target, reg_list,
+			reg_list_size, reg_class);
+	if (result != ERROR_OK) {
+		*reg_list = NULL;
+		*reg_list_size = 0;
+	}
+	return result;
+}
+
+int target_get_gdb_reg_list_noread(struct target *target,
+		struct reg **reg_list[], int *reg_list_size,
+		enum target_register_class reg_class)
+{
+	if (target->type->get_gdb_reg_list_noread &&
+			target->type->get_gdb_reg_list_noread(target, reg_list,
+				reg_list_size, reg_class) == ERROR_OK)
+		return ERROR_OK;
+	return target_get_gdb_reg_list(target, reg_list, reg_list_size, reg_class);
 }
 
 bool target_supports_gdb_connection(struct target *target)
@@ -1587,8 +1606,9 @@ int target_call_event_callbacks(struct target *target, enum target_event event)
 		target_call_event_callbacks(target, TARGET_EVENT_GDB_HALT);
 	}
 
-	LOG_DEBUG("target event %i (%s)", event,
-			Jim_Nvp_value2name_simple(nvp_target_event, event)->name);
+	LOG_DEBUG("target event %i (%s) for core %s", event,
+			Jim_Nvp_value2name_simple(nvp_target_event, event)->name,
+			target_name(target));
 
 	target_handle_event(target, event);
 
@@ -3618,14 +3638,7 @@ static COMMAND_HELPER(handle_verify_image_command_internal, enum verify_mode ver
 
 				data = malloc(buf_cnt);
 
-				/* Can we use 32bit word accesses? */
-				int size = 1;
-				int count = buf_cnt;
-				if ((count % 4) == 0) {
-					size *= 4;
-					count /= 4;
-				}
-				retval = target_read_memory(target, image.sections[i].base_address, size, count, data);
+				retval = target_read_buffer(target, image.sections[i].base_address, buf_cnt, data);
 				if (retval == ERROR_OK) {
 					uint32_t t;
 					for (t = 0; t < buf_cnt; t++) {
