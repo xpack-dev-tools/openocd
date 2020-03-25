@@ -816,6 +816,11 @@ static int ublast_execute_queue(void)
 		case JTAG_SCAN:
 			ret = ublast_scan(cmd->cmd.scan);
 			break;
+		default:
+			LOG_ERROR("BUG: unknown JTAG command type 0x%X",
+				  cmd->type);
+			ret = ERROR_FAIL;
+			break;
 		}
 	}
 
@@ -1066,13 +1071,18 @@ static const struct command_registration ublast_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-struct jtag_interface usb_blaster_interface = {
+static struct jtag_interface usb_blaster_interface = {
+	.supported = DEBUG_CAP_TMS_SEQ,
+	.execute_queue = ublast_execute_queue,
+};
+
+struct adapter_driver usb_blaster_adapter_driver = {
 	.name = "usb_blaster",
 	.transports = jtag_only,
 	.commands = ublast_command_handlers,
-	.supported = DEBUG_CAP_TMS_SEQ,
 
-	.execute_queue = ublast_execute_queue,
 	.init = ublast_init,
 	.quit = ublast_quit,
+
+	.jtag_ops = &usb_blaster_interface,
 };

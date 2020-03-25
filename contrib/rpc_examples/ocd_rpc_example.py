@@ -49,10 +49,16 @@ class OpenOcd:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def __enter__(self):
-        self.sock.connect((self.tclRpcIp, self.tclRpcPort))
+        self.connect()
         return self
 
     def __exit__(self, type, value, traceback):
+        self.disconnect()
+
+    def connect(self):
+        self.sock.connect((self.tclRpcIp, self.tclRpcPort))
+
+    def disconnect(self):
         try:
             self.send("exit")
         finally:
@@ -92,7 +98,7 @@ class OpenOcd:
         self.send("array unset output") # better to clear the array before
         self.send("mem2array output %d 0x%x %d" % (wordLen, address, n))
 
-        output = [*map(int, self.send("echo $output").split(" "))]
+        output = [*map(int, self.send("return $output").split(" "))]
         d = dict([tuple(output[i:i + 2]) for i in range(0, len(output), 2)])
 
         return [d[k] for k in sorted(d.keys())]
@@ -116,7 +122,7 @@ if __name__ == "__main__":
     with OpenOcd() as ocd:
         ocd.send("reset")
 
-        show(ocd.send("echo \"echo says hi!\"")[:-1])
+        show(ocd.send("capture { echo \"echo says hi!\" }")[:-1])
         show(ocd.send("capture \"halt\"")[:-1])
 
         # Read the first few words at the RAM region (put starting adress of RAM

@@ -24,6 +24,7 @@ noinst_LTLIBRARIES += %D%/libtarget.la
 	$(STM8_SRC) \
 	$(INTEL_IA32_SRC) \
 	$(ESIRISC_SRC) \
+        $(ARC_SRC) \
 	%D%/avrt.c \
 	%D%/dsp563xx.c \
 	%D%/dsp563xx_once.c \
@@ -32,6 +33,7 @@ noinst_LTLIBRARIES += %D%/libtarget.la
 
 if TARGET64
 %C%_libtarget_la_SOURCES +=$(ARMV8_SRC)
+%C%_libtarget_la_SOURCES +=$(MIPS64_SRC)
 endif
 
 TARGET_CORE_SRC = \
@@ -97,6 +99,7 @@ ARM_DEBUG_SRC = \
 	%D%/arm_dap.c \
 	%D%/armv7a_cache.c \
 	%D%/armv7a_cache_l2x.c \
+	%D%/adi_v5_dapdirect.c \
 	%D%/adi_v5_jtag.c \
 	%D%/adi_v5_swd.c \
 	%D%/embeddedice.c \
@@ -118,6 +121,14 @@ MIPS32_SRC = \
 	%D%/mips_m4k.c \
 	%D%/mips32_pracc.c \
 	%D%/mips32_dmaacc.c \
+	%D%/mips_ejtag.c
+
+MIPS64_SRC = \
+	%D%/mips64.c \
+	%D%/mips32_pracc.c \
+	%D%/mips64_pracc.c \
+	%D%/mips_mips64.c \
+	%D%/trace.c \
 	%D%/mips_ejtag.c
 
 NDS32_SRC = \
@@ -145,6 +156,12 @@ ESIRISC_SRC = \
 	%D%/esirisc.c \
 	%D%/esirisc_jtag.c \
 	%D%/esirisc_trace.c
+
+ARC_SRC = \
+        %D%/arc.c \
+        %D%/arc_cmd.c \
+        %D%/arc_jtag.c \
+        %D%/arc_mem.c
 
 %C%_libtarget_la_SOURCES += \
 	%D%/algorithm.h \
@@ -193,10 +210,13 @@ ESIRISC_SRC = \
 	%D%/etm_dummy.h \
 	%D%/image.h \
 	%D%/mips32.h \
+	%D%/mips64.h \
 	%D%/mips_m4k.h \
+	%D%/mips_mips64.h \
 	%D%/mips_ejtag.h \
 	%D%/mips32_pracc.h \
 	%D%/mips32_dmaacc.h \
+	%D%/mips64_pracc.h \
 	%D%/oocd_trace.h \
 	%D%/register.h \
 	%D%/target.h \
@@ -230,7 +250,11 @@ ESIRISC_SRC = \
 	%D%/esirisc.h \
 	%D%/esirisc_jtag.h \
 	%D%/esirisc_regs.h \
-	%D%/esirisc_trace.h
+	%D%/esirisc_trace.h \
+	%D%/arc.h \
+	%D%/arc_cmd.h \
+	%D%/arc_jtag.h \
+	%D%/arc_mem.h
 
 include %D%/openrisc/Makefile.am
 include %D%/riscv/Makefile.am

@@ -1,20 +1,20 @@
 /*
-    OpenOCD STM8 target driver
-    Copyright (C) 2017  Ake Rehnman
-    ake.rehnman(at)gmail.com
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*   OpenOCD STM8 target driver
+*   Copyright (C) 2017  Ake Rehnman
+*   ake.rehnman(at)gmail.com
+*
+*   This program is free software: you can redistribute it and/or modify
+*   it under the terms of the GNU General Public License as published by
+*   the Free Software Foundation, either version 2 of the License, or
+*   (at your option) any later version.
+*
+*   This program is distributed in the hope that it will be useful,
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*   GNU General Public License for more details.
+*
+*   You should have received a copy of the GNU General Public License
+*   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifdef HAVE_CONFIG_H
@@ -25,6 +25,7 @@
 #include "target.h"
 #include "target_type.h"
 #include "hello.h"
+#include "jtag/interface.h"
 #include "jtag/jtag.h"
 #include "jtag/hla/hla_transport.h"
 #include "jtag/hla/hla_interface.h"
@@ -355,7 +356,7 @@ static int stm8_set_hwbreak(struct target *target,
 
 	if ((comparator_list[0].type != HWBRK_EXEC)
 			&& (comparator_list[1].type != HWBRK_EXEC)) {
-		if ((comparator_list[0].type != comparator_list[1].type)) {
+		if (comparator_list[0].type != comparator_list[1].type) {
 			LOG_ERROR("data hw breakpoints must be of same type");
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
@@ -930,9 +931,7 @@ static int stm8_reset_assert(struct target *target)
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
 
 	if (jtag_reset_config & RESET_HAS_SRST) {
-		jtag_add_reset(0, 1);
-		res = adapter->layout->api->assert_srst(adapter->handle, 0);
-
+		res = adapter_assert_reset();
 		if (res == ERROR_OK)
 			/* hardware srst supported */
 			use_srst_fallback = false;
@@ -966,20 +965,13 @@ static int stm8_reset_assert(struct target *target)
 static int stm8_reset_deassert(struct target *target)
 {
 	int res;
-	struct hl_interface_s *adapter = target_to_adapter(target);
-
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
 
 	if (jtag_reset_config & RESET_HAS_SRST) {
-		res = adapter->layout->api->assert_srst(adapter->handle, 1);
+		res = adapter_deassert_reset();
 		if ((res != ERROR_OK) && (res != ERROR_COMMAND_NOTFOUND))
 			return res;
 	}
-
-	/* virtual deassert reset, we need it for the internal
-	 * jtag state machine
-	 */
-	jtag_add_reset(0, 0);
 
 	/* The cpu should now be stalled. If halt was requested
 	   let poll detect the stall */

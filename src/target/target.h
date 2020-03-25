@@ -275,6 +275,7 @@ enum target_event {
 	TARGET_EVENT_DEBUG_RESUMED, /* target resumed to execute on behalf of the debugger */
 
 	TARGET_EVENT_EXAMINE_START,
+	TARGET_EVENT_EXAMINE_FAIL,
 	TARGET_EVENT_EXAMINE_END,
 
 	TARGET_EVENT_GDB_ATTACH,
@@ -499,6 +500,16 @@ const char *target_get_gdb_arch(struct target *target);
  * This routine is a wrapper for target->type->get_gdb_reg_list.
  */
 int target_get_gdb_reg_list(struct target *target,
+		struct reg **reg_list[], int *reg_list_size,
+		enum target_register_class reg_class);
+
+/**
+ * Obtain the registers for GDB, but don't read register values from the
+ * target.
+ *
+ * This routine is a wrapper for target->type->get_gdb_reg_list_noread.
+ */
+int target_get_gdb_reg_list_noread(struct target *target,
 		struct reg **reg_list[], int *reg_list_size,
 		enum target_register_class reg_class);
 
