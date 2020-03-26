@@ -15,6 +15,7 @@ to store the few changes that were performed in
 ## Branches
 
 - `xpack` - the updated content, used during the builds
+- `xpack-develop` - the updated content, used during development
 - `master` - the original content, it follows the upstream master.
 
 ## Changes
