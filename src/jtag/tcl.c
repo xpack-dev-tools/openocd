@@ -1059,34 +1059,6 @@ COMMAND_HANDLER(handle_jtag_rclk_command)
 	return retval;
 }
 
-COMMAND_HANDLER(handle_jtag_reset_command)
-{
-	if (CMD_ARGC != 2)
-		return ERROR_COMMAND_SYNTAX_ERROR;
-
-	int trst = -1;
-	if (CMD_ARGV[0][0] == '1')
-		trst = 1;
-	else if (CMD_ARGV[0][0] == '0')
-		trst = 0;
-	else
-		return ERROR_COMMAND_SYNTAX_ERROR;
-
-	int srst = -1;
-	if (CMD_ARGV[1][0] == '1')
-		srst = 1;
-	else if (CMD_ARGV[1][0] == '0')
-		srst = 0;
-	else
-		return ERROR_COMMAND_SYNTAX_ERROR;
-
-	if (adapter_init(CMD_CTX) != ERROR_OK)
-		return ERROR_JTAG_INIT_FAILED;
-
-	jtag_add_reset(trst, srst);
-	return jtag_execute_queue();
-}
-
 COMMAND_HANDLER(handle_runtest_command)
 {
 	if (CMD_ARGC != 1)
@@ -1159,7 +1131,7 @@ COMMAND_HANDLER(handle_irscan_command)
 		}
 		int field_size = tap->ir_length;
 		fields[i].num_bits = field_size;
-		uint8_t *v = malloc(DIV_ROUND_UP(field_size, 8));
+		uint8_t *v = calloc(1, DIV_ROUND_UP(field_size, 8));
 
 		uint64_t value;
 		retval = parse_u64(CMD_ARGV[i * 2 + 1], &value);
@@ -1332,14 +1304,6 @@ static const struct command_registration jtag_command_handlers[] = {
 		.usage = ""
 	},
 	{
-		.name = "jtag_reset",
-		.handler = handle_jtag_reset_command,
-		.mode = COMMAND_EXEC,
-		.help = "Set reset line values.  Value '1' is active, "
-			"value '0' is inactive.",
-		.usage = "trst_active srst_active",
-	},
-	{
 		.name = "runtest",
 		.handler = handle_runtest_command,
 		.mode = COMMAND_EXEC,
@@ -1350,7 +1314,7 @@ static const struct command_registration jtag_command_handlers[] = {
 		.name = "irscan",
 		.handler = handle_irscan_command,
 		.mode = COMMAND_EXEC,
-		.help = "Execute Instruction Register (DR) scan.  The "
+		.help = "Execute Instruction Register (IR) scan.  The "
 			"specified opcodes are put into each TAP's IR, "
 			"and other TAPs are put in BYPASS.",
 		.usage = "[tap_name instruction]* ['-endstate' state_name]",

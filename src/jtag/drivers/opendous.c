@@ -32,7 +32,7 @@
 
 #include <jtag/interface.h>
 #include <jtag/commands.h>
-#include "libusb_common.h"
+#include "libusb_helper.h"
 #include <string.h>
 #include <time.h>
 
@@ -134,7 +134,7 @@ static void opendous_tap_append_scan(int length, uint8_t *buffer, struct scan_co
 
 /* opendous lowlevel functions */
 struct opendous_jtag {
-	struct jtag_libusb_device_handle *usb_handle;
+	struct libusb_device_handle *usb_handle;
 };
 
 static struct opendous_jtag *opendous_usb_open(void);
@@ -234,13 +234,19 @@ static const struct command_registration opendous_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-struct jtag_interface opendous_interface = {
+static struct jtag_interface opendous_interface = {
+	.execute_queue = opendous_execute_queue,
+};
+
+struct adapter_driver opendous_adapter_driver = {
 	.name = "opendous",
 	.transports = jtag_only,
 	.commands = opendous_command_handlers,
-	.execute_queue = opendous_execute_queue,
+
 	.init = opendous_init,
 	.quit = opendous_quit,
+
+	.jtag_ops = &opendous_interface,
 };
 
 static int opendous_execute_queue(void)
@@ -708,12 +714,12 @@ struct opendous_jtag *opendous_usb_open(void)
 {
 	struct opendous_jtag *result;
 
-	struct jtag_libusb_device_handle *devh;
-	if (jtag_libusb_open(opendous_probe->VID, opendous_probe->PID, NULL, &devh) != ERROR_OK)
+	struct libusb_device_handle *devh;
+	if (jtag_libusb_open(opendous_probe->VID, opendous_probe->PID, NULL, &devh, NULL) != ERROR_OK)
 		return NULL;
 
 	jtag_libusb_set_configuration(devh, 0);
-	jtag_libusb_claim_interface(devh, 0);
+	libusb_claim_interface(devh, 0);
 
 	result = malloc(sizeof(*result));
 	result->usb_handle = devh;
@@ -764,8 +770,8 @@ int opendous_usb_write(struct opendous_jtag *opendous_jtag, int out_length)
 			LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_OUT,
 			FUNC_WRITE_DATA, 0, 0, (char *) usb_out_buffer, out_length, OPENDOUS_USB_TIMEOUT);
 	} else {
-		result = jtag_libusb_bulk_write(opendous_jtag->usb_handle, OPENDOUS_WRITE_ENDPOINT, \
-			(char *)usb_out_buffer, out_length, OPENDOUS_USB_TIMEOUT);
+		jtag_libusb_bulk_write(opendous_jtag->usb_handle, OPENDOUS_WRITE_ENDPOINT, \
+			(char *)usb_out_buffer, out_length, OPENDOUS_USB_TIMEOUT, &result);
 	}
 #ifdef _DEBUG_USB_COMMS_
 	LOG_DEBUG("USB write end: %d bytes", result);
@@ -791,8 +797,8 @@ int opendous_usb_read(struct opendous_jtag *opendous_jtag)
 			LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_IN,
 			FUNC_READ_DATA, 0, 0, (char *) usb_in_buffer, OPENDOUS_IN_BUFFER_SIZE, OPENDOUS_USB_TIMEOUT);
 	} else {
-		result = jtag_libusb_bulk_read(opendous_jtag->usb_handle, OPENDOUS_READ_ENDPOINT,
-			(char *)usb_in_buffer, OPENDOUS_IN_BUFFER_SIZE, OPENDOUS_USB_TIMEOUT);
+		jtag_libusb_bulk_read(opendous_jtag->usb_handle, OPENDOUS_READ_ENDPOINT,
+			(char *)usb_in_buffer, OPENDOUS_IN_BUFFER_SIZE, OPENDOUS_USB_TIMEOUT, &result);
 	}
 #ifdef _DEBUG_USB_COMMS_
 	LOG_DEBUG("USB read end: %d bytes", result);

@@ -111,6 +111,7 @@ extern struct target_type stm8_target;
 extern struct target_type riscv_target;
 extern struct target_type mem_ap_target;
 extern struct target_type esirisc_target;
+extern struct target_type arcv2_target;
 
 static struct target_type *target_types[] = {
 	&arm7tdmi_target,
@@ -146,6 +147,7 @@ static struct target_type *target_types[] = {
 	&riscv_target,
 	&mem_ap_target,
 	&esirisc_target,
+	&arcv2_target,
 #if BUILD_TARGET64
 	&aarch64_target,
 	&mips_mips64_target,
@@ -217,6 +219,7 @@ static const Jim_Nvp nvp_target_event[] = {
 	{ .value = TARGET_EVENT_RESET_END,           .name = "reset-end" },
 
 	{ .value = TARGET_EVENT_EXAMINE_START, .name = "examine-start" },
+	{ .value = TARGET_EVENT_EXAMINE_FAIL, .name = "examine-fail" },
 	{ .value = TARGET_EVENT_EXAMINE_END, .name = "examine-end" },
 
 	{ .value = TARGET_EVENT_DEBUG_HALTED, .name = "debug-halted" },
@@ -706,13 +709,17 @@ static int default_check_reset(struct target *target)
 	return ERROR_OK;
 }
 
+/* Equvivalent Tcl code arp_examine_one is in src/target/startup.tcl
+ * Keep in sync */
 int target_examine_one(struct target *target)
 {
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_START);
 
 	int retval = target->type->examine(target);
-	if (retval != ERROR_OK)
+	if (retval != ERROR_OK) {
+		target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_FAIL);
 		return retval;
+	}
 
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_END);
 
@@ -1682,7 +1689,7 @@ static int target_call_timer_callbacks_check_time(int checktime)
 	 * next item; initially, that's a standalone "root of the
 	 * list" variable. */
 	struct target_timer_callback **callback = &target_timer_callbacks;
-	while (*callback) {
+	while (callback && *callback) {
 		if ((*callback)->removed) {
 			struct target_timer_callback *p = *callback;
 			*callback = (*callback)->next;
@@ -2042,6 +2049,8 @@ static void target_destroy(struct target *target)
 		target->smp = 0;
 	}
 
+	rtos_destroy(target);
+
 	free(target->gdb_port_override);
 	free(target->type);
 	free(target->trace_info);
@@ -2281,7 +2290,7 @@ static int target_read_buffer_default(struct target *target, target_addr_t addre
 	return ERROR_OK;
 }
 
-int target_checksum_memory(struct target *target, target_addr_t address, uint32_t size, uint32_t* crc)
+int target_checksum_memory(struct target *target, target_addr_t address, uint32_t size, uint32_t *crc)
 {
 	uint8_t *buffer;
 	int retval;
@@ -3338,8 +3347,8 @@ COMMAND_HANDLER(handle_mw_command)
 	target_addr_t address;
 	COMMAND_PARSE_ADDRESS(CMD_ARGV[0], address);
 
-	target_addr_t value;
-	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], value);
+	uint64_t value;
+	COMMAND_PARSE_NUMBER(u64, CMD_ARGV[1], value);
 
 	unsigned count = 1;
 	if (CMD_ARGC == 3)
@@ -5157,7 +5166,6 @@ static int jim_target_wait_state(Jim_Interp *interp, int argc, Jim_Obj *const *a
 				"target: %s wait %s fails (%#s) %s",
 				target_name(target), n->name,
 				eObj, target_strerror_safe(e));
-		Jim_FreeNewObj(interp, eObj);
 		return JIM_ERR;
 	}
 	return JIM_OK;

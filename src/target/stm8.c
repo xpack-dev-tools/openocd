@@ -25,6 +25,7 @@
 #include "target.h"
 #include "target_type.h"
 #include "hello.h"
+#include "jtag/interface.h"
 #include "jtag/jtag.h"
 #include "jtag/hla/hla_transport.h"
 #include "jtag/hla/hla_interface.h"
@@ -355,7 +356,7 @@ static int stm8_set_hwbreak(struct target *target,
 
 	if ((comparator_list[0].type != HWBRK_EXEC)
 			&& (comparator_list[1].type != HWBRK_EXEC)) {
-		if ((comparator_list[0].type != comparator_list[1].type)) {
+		if (comparator_list[0].type != comparator_list[1].type) {
 			LOG_ERROR("data hw breakpoints must be of same type");
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
@@ -930,9 +931,7 @@ static int stm8_reset_assert(struct target *target)
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
 
 	if (jtag_reset_config & RESET_HAS_SRST) {
-		jtag_add_reset(0, 1);
-		res = adapter->layout->api->assert_srst(adapter->handle, 0);
-
+		res = adapter_assert_reset();
 		if (res == ERROR_OK)
 			/* hardware srst supported */
 			use_srst_fallback = false;
@@ -966,20 +965,13 @@ static int stm8_reset_assert(struct target *target)
 static int stm8_reset_deassert(struct target *target)
 {
 	int res;
-	struct hl_interface_s *adapter = target_to_adapter(target);
-
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
 
 	if (jtag_reset_config & RESET_HAS_SRST) {
-		res = adapter->layout->api->assert_srst(adapter->handle, 1);
+		res = adapter_deassert_reset();
 		if ((res != ERROR_OK) && (res != ERROR_COMMAND_NOTFOUND))
 			return res;
 	}
-
-	/* virtual deassert reset, we need it for the internal
-	 * jtag state machine
-	 */
-	jtag_add_reset(0, 0);
 
 	/* The cpu should now be stalled. If halt was requested
 	   let poll detect the stall */

@@ -66,7 +66,7 @@ static int write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer);
 static int riscv013_test_sba_config_reg(struct target *target, target_addr_t legal_address,
 		uint32_t num_words, target_addr_t illegal_address, bool run_sbbusyerror_test);
-void write_memory_sba_simple(struct target *target, target_addr_t addr, uint32_t* write_data,
+void write_memory_sba_simple(struct target *target, target_addr_t addr, uint32_t *write_data,
 		uint32_t write_size, uint32_t sbcs);
 void read_memory_sba_simple(struct target *target, target_addr_t addr,
 		uint32_t *rd_buf, uint32_t read_size, uint32_t sbcs);
@@ -402,7 +402,7 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 {
 	struct scan_field field;
 	uint8_t in_value[4];
-	uint8_t out_value[4];
+	uint8_t out_value[4] = { 0 };
 
 	buf_set_u32(out_value, 0, 32, out);
 
@@ -468,6 +468,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 	}
 
 	memset(in, 0, num_bytes);
+	memset(out, 0, num_bytes);
 
 	assert(info->abits != 0);
 

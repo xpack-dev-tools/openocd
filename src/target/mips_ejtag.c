@@ -43,7 +43,7 @@ void mips_ejtag_set_instr(struct mips_ejtag *ejtag_info, uint32_t new_instr)
 		struct scan_field field;
 		field.num_bits = tap->ir_length;
 
-		uint8_t t[4];
+		uint8_t t[4] = { 0 };
 		field.out_value = t;
 		buf_set_u32(t, 0, field.num_bits, new_instr);
 
@@ -100,7 +100,7 @@ int mips_ejtag_drscan_64(struct mips_ejtag *ejtag_info, uint64_t *data)
 	if (tap == NULL)
 		return ERROR_FAIL;
 	struct scan_field field;
-	uint8_t t[8], r[8];
+	uint8_t t[8] = { 0 }, r[8];
 	int retval;
 
 	field.num_bits = 64;
@@ -130,7 +130,7 @@ void mips_ejtag_drscan_32_queued(struct mips_ejtag *ejtag_info, uint32_t data_ou
 	struct scan_field field;
 	field.num_bits = 32;
 
-	uint8_t scan_out[4];
+	uint8_t scan_out[4] = { 0 };
 	field.out_value = scan_out;
 	buf_set_u32(scan_out, 0, field.num_bits, data_out);
 
@@ -349,7 +349,7 @@ static void ejtag_main_print_imp(struct mips_ejtag *ejtag_info)
 		EJTAG_IMP_HAS(EJTAG_IMP_ASID6) ? " ASID_6" : "",
 		EJTAG_IMP_HAS(EJTAG_IMP_MIPS16) ? " MIPS16" : "",
 		EJTAG_IMP_HAS(EJTAG_IMP_NODMA) ? " noDMA" : " DMA",
-		EJTAG_IMP_HAS(EJTAG_DCR_MIPS64) ? " MIPS64" : " MIPS32");
+		EJTAG_IMP_HAS(EJTAG_IMP_MIPS64) ? " MIPS64" : " MIPS32");
 
 	switch (ejtag_info->ejtag_version) {
 		case EJTAG_VERSION_20:
