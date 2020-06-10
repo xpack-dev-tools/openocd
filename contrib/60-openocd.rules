@@ -116,6 +116,8 @@ ATTRS{idVendor}=="1366", ATTRS{idProduct}=="1015", MODE="666"
 ATTRS{idVendor}=="1366", ATTRS{idProduct}=="1016", MODE="666"
 ATTRS{idVendor}=="1366", ATTRS{idProduct}=="1017", MODE="666"
 ATTRS{idVendor}=="1366", ATTRS{idProduct}=="1018", MODE="666"
+ATTRS{idVendor}=="1366", ATTRS{idProduct}=="1051", MODE="666"
+ATTRS{idVendor}=="1366", ATTRS{idProduct}=="1061", MODE="666"
 
 # Raisonance RLink
 ATTRS{idVendor}=="138e", ATTRS{idProduct}=="9000", MODE="666"
