@@ -769,6 +769,27 @@ struct reg_cache *arm_build_reg_cache(struct target *target, struct arm *arm)
 	return cache;
 }
 
+void arm_free_reg_cache(struct arm *arm)
+{
+	if (!arm || !arm->core_cache)
+		return;
+
+	struct reg_cache *cache = arm->core_cache;
+
+	for (unsigned int i = 0; i < cache->num_regs; i++) {
+		struct reg *reg = &cache->reg_list[i];
+
+		free(reg->feature);
+		free(reg->reg_data_type);
+	}
+
+	free(cache->reg_list[0].arch_info);
+	free(cache->reg_list);
+	free(cache);
+
+	arm->core_cache = NULL;
+}
+
 int arm_arch_state(struct target *target)
 {
 	struct arm *arm = target_to_arm(target);
@@ -1223,7 +1244,6 @@ int arm_get_gdb_reg_list(struct target *target,
 		(*reg_list)[25] = arm->cpsr;
 
 		return ERROR_OK;
-		break;
 
 	case REG_CLASS_ALL:
 		switch (arm->core_type) {
@@ -1273,12 +1293,10 @@ int arm_get_gdb_reg_list(struct target *target,
 		}
 
 		return ERROR_OK;
-		break;
 
 	default:
 		LOG_ERROR("not a valid register class type in query.");
 		return ERROR_FAIL;
-		break;
 	}
 }
 

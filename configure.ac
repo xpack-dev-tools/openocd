@@ -222,6 +222,10 @@ AC_ARG_ENABLE([dummy],
   AS_HELP_STRING([--enable-dummy], [Enable building the dummy port driver]),
   [build_dummy=$enableval], [build_dummy=no])
 
+AC_ARG_ENABLE([rshim],
+  AS_HELP_STRING([--enable-rshim], [Enable building the rshim driver]),
+  [build_rshim=$enableval], [build_rshim=no])
+
 m4_define([AC_ARG_ADAPTERS], [
   m4_foreach([adapter], [$1],
 	[AC_ARG_ENABLE(ADAPTER_OPT([adapter]),
@@ -338,6 +342,13 @@ AS_CASE([$host_os],
     AS_IF([test "x$build_xlnx_pcie_xvc" = "xyes"], [
       AC_MSG_ERROR([xlnx_pcie_xvc is only available on linux])
     ])
+
+    AS_CASE([$host_os], [freebsd*], [],
+    [
+      AS_IF([test "x$build_rshim" = "xyes"], [
+        AC_MSG_ERROR([build_rshim is only available on linux or freebsd])
+      ])
+    ])
 ])
 
 AC_ARG_ENABLE([minidriver_dummy],
@@ -352,10 +363,6 @@ AC_ARG_ENABLE([internal-libjaylink],
   AS_HELP_STRING([--disable-internal-libjaylink],
   [Disable building internal libjaylink]),
   [use_internal_libjaylink=$enableval], [use_internal_libjaylink=yes])
-
-AC_ARG_ENABLE([target64],
-  AS_HELP_STRING([--disable-target64], [Disable 64-bit target address]),
-    [build_target64=$enableval], [build_target64=yes])
 
 build_minidriver=no
 AC_MSG_CHECKING([whether to enable ZY1000 minidriver])
@@ -486,6 +493,12 @@ AS_IF([test "x$build_parport" = "xyes"], [
   AC_DEFINE([BUILD_PARPORT], [0], [0 if you don't want parport.])
 ])
 
+AS_IF([test "x$build_rshim" = "xyes"], [
+  AC_DEFINE([BUILD_RSHIM], [1], [1 if you want to debug BlueField SoC via rshim.])
+], [
+  AC_DEFINE([BUILD_RSHIM], [0], [0 if you don't want to debug BlueField SoC via rshim.])
+])
+
 AS_IF([test "x$build_dummy" = "xyes"], [
   build_bitbang=yes
   AC_DEFINE([BUILD_DUMMY], [1], [1 if you want dummy driver.])
@@ -609,13 +622,6 @@ AS_IF([test "x$build_xlnx_pcie_xvc" = "xyes"], [
   AC_DEFINE([BUILD_XLNX_PCIE_XVC], [0], [0 if you don't want Xilinx XVC/PCIe driver.])
 ])
 
-AS_IF([test "x$build_target64" = "xyes"], [
-  AC_DEFINE([BUILD_TARGET64], [1], [1 if you want 64-bit addresses.])
-], [
-  AC_DEFINE([BUILD_TARGET64], [0], [0 if you don't want 64-bit addresses.])
-])
-
-
 PKG_CHECK_MODULES([LIBUSB1], [libusb-1.0], [
 	use_libusb1=yes
 	AC_DEFINE([HAVE_LIBUSB1], [1], [Define if you have libusb-1.x])
@@ -738,7 +744,7 @@ AM_CONDITIONAL([BITQ], [test "x$build_bitq" = "xyes"])
 AM_CONDITIONAL([USE_LIBFTDI], [test "x$use_libftdi" = "xyes"])
 AM_CONDITIONAL([USE_HIDAPI], [test "x$use_hidapi" = "xyes"])
 AM_CONDITIONAL([USE_LIBJAYLINK], [test "x$use_libjaylink" = "xyes"])
-AM_CONDITIONAL([TARGET64], [test "x$build_target64" = "xyes"])
+AM_CONDITIONAL([RSHIM], [test "x$build_rshim" = "xyes"])
 
 AM_CONDITIONAL([MINIDRIVER], [test "x$build_minidriver" = "xyes"])
 AM_CONDITIONAL([MINIDRIVER_DUMMY], [test "x$build_minidriver_dummy" = "xyes"])

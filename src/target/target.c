@@ -148,10 +148,8 @@ static struct target_type *target_types[] = {
 	&mem_ap_target,
 	&esirisc_target,
 	&arcv2_target,
-#if BUILD_TARGET64
 	&aarch64_target,
 	&mips_mips64_target,
-#endif
 	NULL,
 };
 
@@ -205,6 +203,8 @@ static const Jim_Nvp nvp_target_event[] = {
 	{ .value = TARGET_EVENT_RESUMED, .name = "resumed" },
 	{ .value = TARGET_EVENT_RESUME_START, .name = "resume-start" },
 	{ .value = TARGET_EVENT_RESUME_END, .name = "resume-end" },
+	{ .value = TARGET_EVENT_STEP_START, .name = "step-start" },
+	{ .value = TARGET_EVENT_STEP_END, .name = "step-end" },
 
 	{ .name = "gdb-start", .value = TARGET_EVENT_GDB_START },
 	{ .name = "gdb-end", .value = TARGET_EVENT_GDB_END },
@@ -1256,7 +1256,17 @@ bool target_supports_gdb_connection(struct target *target)
 int target_step(struct target *target,
 		int current, target_addr_t address, int handle_breakpoints)
 {
-	return target->type->step(target, current, address, handle_breakpoints);
+	int retval;
+
+	target_call_event_callbacks(target, TARGET_EVENT_STEP_START);
+
+	retval = target->type->step(target, current, address, handle_breakpoints);
+	if (retval != ERROR_OK)
+		return retval;
+
+	target_call_event_callbacks(target, TARGET_EVENT_STEP_END);
+
+	return retval;
 }
 
 int target_get_gdb_fileio_info(struct target *target, struct gdb_fileio_info *fileio_info)
@@ -3145,7 +3155,7 @@ COMMAND_HANDLER(handle_step_command)
 
 	struct target *target = get_current_target(CMD_CTX);
 
-	return target->type->step(target, current_pc, addr, 1);
+	return target_step(target, current_pc, addr, 1);
 }
 
 void target_handle_md_output(struct command_invocation *cmd,
@@ -3829,11 +3839,16 @@ COMMAND_HANDLER(handle_rbp_command)
 	if (CMD_ARGC != 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	target_addr_t addr;
-	COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
-
 	struct target *target = get_current_target(CMD_CTX);
-	breakpoint_remove(target, addr);
+
+	if (!strcmp(CMD_ARGV[0], "all")) {
+		breakpoint_remove_all(target);
+	} else {
+		target_addr_t addr;
+		COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
+
+		breakpoint_remove(target, addr);
+	}
 
 	return ERROR_OK;
 }
@@ -4996,7 +5011,7 @@ static int jim_target_examine(Jim_Interp *interp, int argc, Jim_Obj *const *argv
 	if (goi.argc > 0 &&
 	    strcmp(Jim_GetString(argv[1], NULL), "allow-defer") == 0) {
 		/* consume it */
-		struct Jim_Obj *obj;
+		Jim_Obj *obj;
 		int e = Jim_GetOpt_Obj(&goi, &obj);
 		if (e != JIM_OK)
 			return e;
@@ -6217,7 +6232,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.name = "halt",
 		.handler = handle_halt_command,
 		.mode = COMMAND_EXEC,
-		.help = "request target to halt, then wait up to the specified"
+		.help = "request target to halt, then wait up to the specified "
 			"number of milliseconds (default 5000) for it to complete",
 		.usage = "[milliseconds]",
 	},
@@ -6233,7 +6248,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.handler = handle_reset_command,
 		.mode = COMMAND_EXEC,
 		.usage = "[run|halt|init]",
-		.help = "Reset all targets into the specified mode."
+		.help = "Reset all targets into the specified mode. "
 			"Default reset mode is run, if not given.",
 	},
 	{
@@ -6318,7 +6333,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.handler = handle_rbp_command,
 		.mode = COMMAND_EXEC,
 		.help = "remove breakpoint",
-		.usage = "address",
+		.usage = "'all' | address",
 	},
 	{
 		.name = "wp",
