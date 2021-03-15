@@ -88,6 +88,9 @@ ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374e", MODE="666"
 ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374f", MODE="666"
 ATTRS{idVendor}=="0483", ATTRS{idProduct}=="3753", MODE="666"
 
+# Cypress SuperSpeed Explorer Kit
+ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="0007", MODE="666"
+
 # Cypress KitProg in KitProg mode
 ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="f139", MODE="666"
 
@@ -174,6 +177,7 @@ ATTRS{idVendor}=="9e88", ATTRS{idProduct}=="9e8f", MODE="666"
 
 # Keil Software, Inc. ULink
 ATTRS{idVendor}=="c251", ATTRS{idProduct}=="2710", MODE="666"
+ATTRS{idVendor}=="c251", ATTRS{idProduct}=="2750", MODE="666"
 
 # CMSIS-DAP compatible adapters
 ATTRS{product}=="*CMSIS-DAP*", MODE="666"
