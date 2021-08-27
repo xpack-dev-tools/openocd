@@ -233,7 +233,7 @@ retok:
 
 static bool nuttx_detect_rtos(struct target *target)
 {
-	if ((target->rtos->symbols != NULL) &&
+	if ((target->rtos->symbols) &&
 			(target->rtos->symbols[0].address != 0) &&
 			(target->rtos->symbols[1].address != 0)) {
 		return true;
@@ -259,7 +259,7 @@ static int nuttx_update_threads(struct rtos *rtos)
 	uint32_t i;
 	uint8_t state;
 
-	if (rtos->symbols == NULL) {
+	if (!rtos->symbols) {
 		LOG_ERROR("No symbols for NuttX");
 		return -3;
 	}
@@ -314,7 +314,7 @@ static int nuttx_update_threads(struct rtos *rtos)
 
 			state = tcb.dat[state_offset - 8];
 			thread->extra_info_str = NULL;
-			if (state < sizeof(task_state_str)/sizeof(char *)) {
+			if (state < ARRAY_SIZE(task_state_str)) {
 				thread->extra_info_str = malloc(256);
 				snprintf(thread->extra_info_str, 256, "pid:%d, %s",
 				    tcb.dat[pid_offset - 8] |
@@ -352,7 +352,7 @@ static int nuttx_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
 	bool cm4_fpu_enabled = false;
 	struct armv7m_common *armv7m_target = target_to_armv7m(rtos->target);
 	if (is_armv7m(armv7m_target)) {
-		if (armv7m_target->fp_feature == FPv4_SP) {
+		if (armv7m_target->fp_feature == FPV4_SP) {
 			/* Found ARM v7m target which includes a FPU */
 			uint32_t cpacr;
 
@@ -380,12 +380,12 @@ static int nuttx_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
 	    (uint32_t)thread_id + xcpreg_offset, reg_list, num_regs);
 }
 
-static int nuttx_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])
+static int nuttx_get_symbol_list_to_lookup(struct symbol_table_elem *symbol_list[])
 {
 	unsigned int i;
 
-	*symbol_list = (symbol_table_elem_t *) calloc(1,
-		sizeof(symbol_table_elem_t) * ARRAY_SIZE(nuttx_symbol_list));
+	*symbol_list = (struct symbol_table_elem *) calloc(1,
+		sizeof(struct symbol_table_elem) * ARRAY_SIZE(nuttx_symbol_list));
 
 	for (i = 0; i < ARRAY_SIZE(nuttx_symbol_list); i++)
 		(*symbol_list)[i].symbol_name = nuttx_symbol_list[i];

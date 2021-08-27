@@ -30,7 +30,6 @@
 #include <jtag/driver.h>
 #include <jtag/jtag.h>
 #include <transport/transport.h>
-#include <helper/ioutil.h>
 #include <helper/util.h>
 #include <helper/configuration.h>
 #include <flash/nor/core.h>
@@ -38,6 +37,7 @@
 #include <pld/pld.h>
 #include <target/arm_cti.h>
 #include <target/arm_adi_v5.h>
+#include <target/arm_tpiu_swo.h>
 #include <rtt/rtt.h>
 
 #include <server/server.h>
@@ -147,7 +147,7 @@ COMMAND_HANDLER(handle_init_command)
 	initialized = 1;
 
 	retval = command_run_line(CMD_CTX, "target init");
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return ERROR_FAIL;
 
 	retval = adapter_init(CMD_CTX);
@@ -166,11 +166,11 @@ COMMAND_HANDLER(handle_init_command)
 	command_context_mode(CMD_CTX, COMMAND_EXEC);
 
 	retval = command_run_line(CMD_CTX, "transport init");
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return ERROR_FAIL;
 
 	retval = command_run_line(CMD_CTX, "dap init");
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return ERROR_FAIL;
 
 	LOG_DEBUG("Examining targets...");
@@ -188,6 +188,10 @@ COMMAND_HANDLER(handle_init_command)
 	if (command_run_line(CMD_CTX, "pld init") != ERROR_OK)
 		return ERROR_FAIL;
 	command_context_mode(CMD_CTX, COMMAND_EXEC);
+
+	/* in COMMAND_EXEC, after target_examine(), only tpiu or only swo */
+	if (command_run_line(CMD_CTX, "tpiu init") != ERROR_OK)
+		return ERROR_FAIL;
 
 	/* initialize telnet subsystem */
 	gdb_target_add_all(all_targets);
@@ -271,11 +275,12 @@ static struct command_context *setup_command_handler(Jim_Interp *interp)
 		&pld_register_commands,
 		&cti_register_commands,
 		&dap_register_commands,
+		&arm_tpiu_swo_register_commands,
 		NULL
 	};
-	for (unsigned i = 0; NULL != command_registrants[i]; i++) {
+	for (unsigned i = 0; command_registrants[i]; i++) {
 		int retval = (*command_registrants[i])(cmd_ctx);
-		if (ERROR_OK != retval) {
+		if (retval != ERROR_OK) {
 			command_done(cmd_ctx);
 			return NULL;
 		}
@@ -314,12 +319,12 @@ static int openocd_thread(int argc, char *argv[], struct command_context *cmd_ct
 	}
 
 	ret = server_init(cmd_ctx);
-	if (ERROR_OK != ret)
+	if (ret != ERROR_OK)
 		return ERROR_FAIL;
 
 	if (init_at_startup) {
 		ret = command_run_line(cmd_ctx, "init");
-		if (ERROR_OK != ret) {
+		if (ret != ERROR_OK) {
 			server_quit();
 			return ERROR_FAIL;
 		}
@@ -351,9 +356,6 @@ int openocd_main(int argc, char *argv[])
 	if (util_init(cmd_ctx) != ERROR_OK)
 		return EXIT_FAILURE;
 
-	if (ioutil_init(cmd_ctx) != ERROR_OK)
-		return EXIT_FAILURE;
-
 	if (rtt_init() != ERROR_OK)
 		return EXIT_FAILURE;
 
@@ -371,13 +373,15 @@ int openocd_main(int argc, char *argv[])
 
 	flash_free_all_banks();
 	gdb_service_free();
+	arm_tpiu_swo_cleanup_all();
 	server_free();
 
 	unregister_all_commands(cmd_ctx, NULL);
+	help_del_all_commands(cmd_ctx);
 
 	/* free all DAP and CTI objects */
-	dap_cleanup_all();
 	arm_cti_cleanup_all();
+	dap_cleanup_all();
 
 	adapter_quit();
 
@@ -389,9 +393,9 @@ int openocd_main(int argc, char *argv[])
 	rtt_exit();
 	free_config();
 
-	if (ERROR_FAIL == ret)
+	if (ret == ERROR_FAIL)
 		return EXIT_FAILURE;
-	else if (ERROR_OK != ret)
+	else if (ret != ERROR_OK)
 		exit_on_signal(ret);
 
 	return ret;

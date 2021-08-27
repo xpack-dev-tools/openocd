@@ -32,6 +32,8 @@
 #define OPENOCD_TARGET_TARGET_H
 
 #include <helper/list.h>
+#include "helper/replacements.h"
+#include "helper/system.h"
 #include <jim.h>
 
 struct reg;
@@ -155,7 +157,7 @@ struct target {
 
 	struct target_event_action *event_action;
 
-	int reset_halt;						/* attempt resetting the CPU into the halted mode? */
+	bool reset_halt;						/* attempt resetting the CPU into the halted mode? */
 	target_addr_t working_area;				/* working area (initialised RAM). Evaluated
 										 * upon first allocation from virtual/physical address. */
 	bool working_area_virt_spec;		/* virtual address specified? */
@@ -331,7 +333,7 @@ struct target_timer_callback {
 	unsigned int time_ms;
 	enum target_timer_type type;
 	bool removed;
-	struct timeval when;
+	int64_t when;	/* output of timeval_ms() */
 	void *priv;
 	struct target_timer_callback *next;
 };
@@ -405,6 +407,11 @@ int target_call_timer_callbacks(void);
  * a synchronous command completes.
  */
 int target_call_timer_callbacks_now(void);
+/**
+ * Returns when the next registered event will take place. Callers can use this
+ * to go to sleep until that time occurs.
+ */
+int64_t target_timer_next_event(void);
 
 struct target *get_target_by_num(int num);
 struct target *get_current_target(struct command_context *cmd_ctx);
@@ -682,6 +689,13 @@ target_addr_t target_address_max(struct target *target);
  */
 unsigned target_address_bits(struct target *target);
 
+/**
+ * Return the number of data bits this target supports.
+ *
+ * This routine is a wrapper for target->type->data_bits.
+ */
+unsigned int target_data_bits(struct target *target);
+
 /** Return the *name* of this targets current state */
 const char *target_state_name(struct target *target);
 
@@ -780,5 +794,7 @@ int target_profiling_default(struct target *target, uint32_t *samples, uint32_t
 #define ERROR_TARGET_ALGO_EXIT  (-313)
 
 extern bool get_target_reset_nag(void);
+
+#define TARGET_DEFAULT_POLLING_INTERVAL		100
 
 #endif /* OPENOCD_TARGET_TARGET_H */

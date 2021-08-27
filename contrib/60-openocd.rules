@@ -31,6 +31,8 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", MODE="666"
 
 # Original FT232H VID:PID
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", MODE="666"
+# Original FT231XQ VID:PID
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", MODE="666"
 
 # DISTORTEC JTAG-lock-pick Tiny 2
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8220", MODE="666"
@@ -39,8 +41,21 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8220", MODE="666"
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8a98", MODE="666"
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8a99", MODE="666"
 
+# Marvell OpenRD JTAGKey FT2232D B
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="9e90", MODE="666"
+
+
 # XDS100v2
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="a6d0", MODE="666"
+# XDS100v3
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="a6d1", MODE="666"
+
+# OOCDLink
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="baf8", MODE="666"
+
+# Kristech KT-Link
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="bbe2", MODE="666"
+
 
 # Xverve Signalyzer Tool (DT-USB-ST), Signalyzer LITE (DT-USB-SLITE)
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="bca0", MODE="666"
@@ -63,11 +78,11 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="c141", MODE="666"
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cff8", MODE="666"
 
 # Nuvoton NuLink
-ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511b", MODE="660", GROUP="plugdev", TAG+="uaccess"
-ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511c", MODE="660", GROUP="plugdev", TAG+="uaccess"
-ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511d", MODE="660", GROUP="plugdev", TAG+="uaccess"
-ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5200", MODE="660", GROUP="plugdev", TAG+="uaccess"
-ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5201", MODE="660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511b", MODE="666"
+ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511c", MODE="666"
+ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511d", MODE="666"
+ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5200", MODE="666"
+ATTRS{idVendor}=="0416", ATTRS{idProduct}=="5201", MODE="666"
 
 # TI ICDI
 ATTRS{idVendor}=="0451", ATTRS{idProduct}=="c32a", MODE="666"
@@ -97,6 +112,12 @@ ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="f139", MODE="666"
 # Cypress KitProg in CMSIS-DAP mode
 ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="f138", MODE="666"
 
+# Infineon DAP miniWiggler v3
+ATTRS{idVendor}=="058b", ATTRS{idProduct}=="0043", MODE="666"
+
+# Hitex LPC1768-Stick
+ATTRS{idVendor}=="0640", ATTRS{idProduct}=="0026", MODE="666"
+
 # Hilscher NXHX Boards
 ATTRS{idVendor}=="0640", ATTRS{idProduct}=="0028", MODE="666"
 
@@ -106,8 +127,17 @@ ATTRS{idVendor}=="0640", ATTRS{idProduct}=="002c", MODE="666"
 # Hitex STM32-PerformanceStick
 ATTRS{idVendor}=="0640", ATTRS{idProduct}=="002d", MODE="666"
 
+# Hitex Cortino
+ATTRS{idVendor}=="0640", ATTRS{idProduct}=="0032", MODE="666"
+
 # Altera USB Blaster
 ATTRS{idVendor}=="09fb", ATTRS{idProduct}=="6001", MODE="666"
+# Altera USB Blaster2
+ATTRS{idVendor}=="09fb", ATTRS{idProduct}=="6010", MODE="666"
+ATTRS{idVendor}=="09fb", ATTRS{idProduct}=="6810", MODE="666"
+
+# Ashling Opella-LD
+ATTRS{idVendor}=="0B6B", ATTRS{idProduct}=="0040", MODE="666"
 
 # Amontec JTAGkey-HiSpeed
 ATTRS{idVendor}=="0fbb", ATTRS{idProduct}=="1000", MODE="666"
@@ -138,6 +168,11 @@ ATTRS{idVendor}=="138e", ATTRS{idProduct}=="9000", MODE="666"
 # Debug Board for Neo1973
 ATTRS{idVendor}=="1457", ATTRS{idProduct}=="5118", MODE="666"
 
+# OSBDM
+ATTRS{idVendor}=="15a2", ATTRS{idProduct}=="0042", MODE="666"
+ATTRS{idVendor}=="15a2", ATTRS{idProduct}=="0058", MODE="666"
+ATTRS{idVendor}=="15a2", ATTRS{idProduct}=="005e", MODE="666"
+
 # Olimex ARM-USB-OCD
 ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="0003", MODE="666"
 
@@ -153,6 +188,9 @@ ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="002a", MODE="666"
 # Olimex ARM-USB-OCD-H
 ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="002b", MODE="666"
 
+# ixo-usb-jtag - Emulation of a Altera Bus Blaster I on a Cypress FX2 IC
+ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="06ad", MODE="666"
+
 # USBprog with OpenOCD firmware
 ATTRS{idVendor}=="1781", ATTRS{idProduct}=="0c63", MODE="666"
 
@@ -166,6 +204,15 @@ ATTRS{idVendor}=="1cbe", ATTRS{idProduct}=="02a5", MODE="666"
 
 # TI Tiva-based ICDI and XDS110 probes in DFU mode
 ATTRS{idVendor}=="1cbe", ATTRS{idProduct}=="00ff", MODE="666"
+
+# isodebug v1
+ATTRS{idVendor}=="22b7", ATTRS{idProduct}=="150d", MODE="666"
+
+# PLS USB/JTAG Adapter for SPC5xxx
+ATTRS{idVendor}=="263d", ATTRS{idProduct}=="4001", MODE="666"
+
+# Numato Mimas A7 - Artix 7 FPGA Board
+ATTRS{idVendor}=="2a19", ATTRS{idProduct}=="1009", MODE="666"
 
 # Ambiq Micro EVK and Debug boards.
 ATTRS{idVendor}=="2aec", ATTRS{idProduct}=="6010", MODE="666"

@@ -151,7 +151,7 @@ FLASH_BANK_COMMAND_HANDLER(fespi_flash_bank_command)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	fespi_info = malloc(sizeof(struct fespi_flash_bank));
-	if (fespi_info == NULL) {
+	if (!fespi_info) {
 		LOG_ERROR("not enough memory");
 		return ERROR_FAIL;
 	}
@@ -538,7 +538,7 @@ static unsigned as_compile(struct algorithm_steps *as, uint8_t *target,
 					break;
 				}
 			case STEP_WRITE_REG:
-				if (4 > bytes_left) {
+				if (bytes_left < 4) {
 					finish_early = true;
 					break;
 				}
@@ -546,7 +546,7 @@ static unsigned as_compile(struct algorithm_steps *as, uint8_t *target,
 				offset += 3;
 				break;
 			case STEP_SET_DIR:
-				if (3 > bytes_left) {
+				if (bytes_left < 3) {
 					finish_early = true;
 					break;
 				}
@@ -555,7 +555,7 @@ static unsigned as_compile(struct algorithm_steps *as, uint8_t *target,
 				break;
 			case STEP_TXWM_WAIT:
 			case STEP_WIP_WAIT:
-				if (2 > bytes_left) {
+				if (bytes_left < 2) {
 					finish_early = true;
 					break;
 				}
@@ -986,7 +986,7 @@ static int fespi_probe(struct flash_bank *bank)
 	/* create and fill sectors array */
 	bank->num_sectors = fespi_info->dev->size_in_bytes / sectorsize;
 	sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
-	if (sectors == NULL) {
+	if (!sectors) {
 		LOG_ERROR("not enough memory");
 		return ERROR_FAIL;
 	}
@@ -1017,17 +1017,16 @@ static int fespi_protect_check(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-static int get_fespi_info(struct flash_bank *bank, char *buf, int buf_size)
+static int get_fespi_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct fespi_flash_bank *fespi_info = bank->driver_priv;
 
 	if (!(fespi_info->probed)) {
-		snprintf(buf, buf_size,
-				"\nFESPI flash bank not probed yet\n");
+		command_print_sameline(cmd, "\nFESPI flash bank not probed yet\n");
 		return ERROR_OK;
 	}
 
-	snprintf(buf, buf_size, "\nFESPI flash information:\n"
+	command_print_sameline(cmd, "\nFESPI flash information:\n"
 			"  Device \'%s\' (ID 0x%08" PRIx32 ")\n",
 			fespi_info->dev->name, fespi_info->dev->device_id);
 
