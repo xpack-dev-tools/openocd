@@ -96,3 +96,8 @@ TAGS
 # ctags tag files
 tags
 .vscode/ipch
+
+# GNU Global tag files
+GPATH
+GRTAGS
+GTAGS

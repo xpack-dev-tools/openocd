@@ -77,6 +77,9 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="c141", MODE="666"
 # Amontec JTAGkey and JTAGkey-tiny
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cff8", MODE="666"
 
+# ASIX Presto programmer
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="f1a0", MODE="666"
+
 # Nuvoton NuLink
 ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511b", MODE="666"
 ATTRS{idVendor}=="0416", ATTRS{idProduct}=="511c", MODE="666"
@@ -102,6 +105,7 @@ ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374d", MODE="666"
 ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374e", MODE="666"
 ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374f", MODE="666"
 ATTRS{idVendor}=="0483", ATTRS{idProduct}=="3753", MODE="666"
+ATTRS{idVendor}=="0483", ATTRS{idProduct}=="3754", MODE="666"
 
 # Cypress SuperSpeed Explorer Kit
 ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="0007", MODE="666"
