@@ -182,10 +182,8 @@ destroy_rp_free_wa:
 	/* Something went wrong, do some cleanup */
 	destroy_reg_param(&reg_params);
 
-	if (g_stack_area) {
-		target_free_working_area(target, g_stack_area);
-		g_stack_area = NULL;
-	}
+	target_free_working_area(target, g_stack_area);
+	g_stack_area = NULL;
 
 	return hr;
 }
@@ -492,8 +490,7 @@ static const char *protection_to_str(uint8_t protection)
 /** ***********************************************************************************************
  * @brief psoc6_get_info Displays human-readable information about acquired device
  * @param bank current flash bank
- * @param buf pointer to buffer for human-readable text
- * @param buf_size size of the buffer
+ * @param cmd pointer to command invocation instance
  * @return ERROR_OK in case of success, ERROR_XXX code otherwise
  *************************************************************************************************/
 static int psoc6_get_info(struct flash_bank *bank, struct command_invocation *cmd)
@@ -1016,7 +1013,7 @@ static const struct command_registration psoc6_exec_command_handlers[] = {
 		.name = "reset_halt",
 		.handler = psoc6_handle_reset_halt,
 		.mode = COMMAND_EXEC,
-		.usage = NULL,
+		.usage = "",
 		.help = "Tries to simulate broken Vector Catch",
 	},
 	COMMAND_REGISTRATION_DONE

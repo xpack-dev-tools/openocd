@@ -251,6 +251,7 @@ static const struct samd_part saml21_parts[] = {
 
     /* SAMR34/R35 parts have integrated SAML21 with a lora radio */
 	{ 0x28, "SAMR34J18", 256, 32 },
+	{ 0x2B, "SAMR35J18", 256, 32 },
 };
 
 /* Known SAML22 parts. */
@@ -945,11 +946,6 @@ FLASH_BANK_COMMAND_HANDLER(samd_flash_bank_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(samd_handle_info_command)
-{
-	return ERROR_OK;
-}
-
 COMMAND_HANDLER(samd_handle_chip_erase_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
@@ -1208,14 +1204,6 @@ static const struct command_registration at91samd_exec_command_handlers[] = {
 		.handler = samd_handle_reset_deassert,
 		.mode = COMMAND_EXEC,
 		.help = "Deassert internal reset held by DSU.",
-		.usage = "",
-	},
-	{
-		.name = "info",
-		.handler = samd_handle_info_command,
-		.mode = COMMAND_EXEC,
-		.help = "Print information about the current at91samd chip "
-			"and its flash configuration.",
 		.usage = "",
 	},
 	{
