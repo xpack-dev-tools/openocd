@@ -13,6 +13,7 @@
 #include "target/target.h"
 #include "target/algorithm.h"
 #include "target/target_type.h"
+#include <target/smp.h>
 #include "jtag/jtag.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
@@ -476,6 +477,8 @@ static void riscv_free_registers(struct target *target)
 			/* Free the ones we allocated separately. */
 			for (unsigned i = GDB_REGNO_COUNT; i < target->reg_cache->num_regs; i++)
 				free(target->reg_cache->reg_list[i].arch_info);
+			for (unsigned int i = 0; i < target->reg_cache->num_regs; i++)
+				free(target->reg_cache->reg_list[i].value);
 			free(target->reg_cache->reg_list);
 		}
 		free(target->reg_cache);
@@ -900,7 +903,7 @@ int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	breakpoint->set = true;
+	breakpoint->is_set = true;
 	return ERROR_OK;
 }
 
@@ -960,7 +963,7 @@ int riscv_remove_breakpoint(struct target *target,
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	breakpoint->set = false;
+	breakpoint->is_set = false;
 
 	return ERROR_OK;
 }
@@ -987,7 +990,7 @@ int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint)
 	int result = add_trigger(target, &trigger);
 	if (result != ERROR_OK)
 		return result;
-	watchpoint->set = true;
+	watchpoint->is_set = true;
 
 	return ERROR_OK;
 }
@@ -1003,7 +1006,7 @@ int riscv_remove_watchpoint(struct target *target,
 	int result = remove_trigger(target, &trigger);
 	if (result != ERROR_OK)
 		return result;
-	watchpoint->set = false;
+	watchpoint->is_set = false;
 
 	return ERROR_OK;
 }
@@ -1230,13 +1233,14 @@ int riscv_halt(struct target *target)
 
 	int result = ERROR_OK;
 	if (target->smp) {
-		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+		struct target_list *tlist;
+		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			if (halt_prep(t) != ERROR_OK)
 				result = ERROR_FAIL;
 		}
 
-		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			riscv_info_t *i = riscv_info(t);
 			if (i->prepped) {
@@ -1245,7 +1249,7 @@ int riscv_halt(struct target *target)
 			}
 		}
 
-		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			if (halt_finish(t) != ERROR_OK)
 				return ERROR_FAIL;
@@ -1334,9 +1338,9 @@ static int disable_triggers(struct target *target, riscv_reg_t *state)
 		struct watchpoint *watchpoint = target->watchpoints;
 		int i = 0;
 		while (watchpoint) {
-			LOG_DEBUG("watchpoint %d: set=%d", i, watchpoint->set);
-			state[i] = watchpoint->set;
-			if (watchpoint->set) {
+			LOG_DEBUG("watchpoint %d: set=%d", i, watchpoint->is_set);
+			state[i] = watchpoint->is_set;
+			if (watchpoint->is_set) {
 				if (riscv_remove_watchpoint(target, watchpoint) != ERROR_OK)
 					return ERROR_FAIL;
 			}
@@ -1467,14 +1471,17 @@ int riscv_resume(
 	LOG_DEBUG("handle_breakpoints=%d", handle_breakpoints);
 	int result = ERROR_OK;
 	if (target->smp && !single_hart) {
-		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+		struct target_list *tlist;
+		foreach_smp_target_direction(resume_order == RO_NORMAL,
+									 tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			if (resume_prep(t, current, address, handle_breakpoints,
 						debug_execution) != ERROR_OK)
 				result = ERROR_FAIL;
 		}
 
-		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+		foreach_smp_target_direction(resume_order == RO_NORMAL,
+									 tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			riscv_info_t *i = riscv_info(t);
 			if (i->prepped) {
@@ -1484,7 +1491,8 @@ int riscv_resume(
 			}
 		}
 
-		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+		foreach_smp_target_direction(resume_order == RO_NORMAL,
+									 tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			if (resume_finish(t) != ERROR_OK)
 				return ERROR_FAIL;
@@ -1749,8 +1757,8 @@ static int riscv_get_gdb_reg_list_internal(struct target *target,
 		enum target_register_class reg_class, bool read)
 {
 	RISCV_INFO(r);
-	LOG_DEBUG("current_hartid=%d, reg_class=%d, read=%d",
-			r->current_hartid, reg_class, read);
+	LOG_DEBUG("[%s] {%d} reg_class=%d, read=%d",
+			target_name(target), r->current_hartid, reg_class, read);
 
 	if (!target->reg_cache) {
 		LOG_ERROR("Target not initialized. Return ERROR_FAIL.");
@@ -2178,9 +2186,8 @@ int riscv_openocd_poll(struct target *target)
 		unsigned halts_discovered = 0;
 		unsigned should_remain_halted = 0;
 		unsigned should_resume = 0;
-		unsigned i = 0;
-		for (struct target_list *list = target->head; list;
-				list = list->next, i++) {
+		struct target_list *list;
+		foreach_smp_target(list, target->smp_targets) {
 			struct target *t = list->target;
 			riscv_info_t *r = riscv_info(t);
 			enum riscv_poll_hart out = riscv_poll_hart(t, r->current_hartid);
@@ -2240,8 +2247,7 @@ int riscv_openocd_poll(struct target *target)
 		}
 
 		/* Sample memory if any target is running. */
-		for (struct target_list *list = target->head; list;
-				list = list->next, i++) {
+		foreach_smp_target(list, target->smp_targets) {
 			struct target *t = list->target;
 			if (t->state == TARGET_RUNNING) {
 				sample_memory(target);
@@ -4479,7 +4485,7 @@ int riscv_init_registers(struct target *target)
 			assert(reg_name < info->reg_names + target->reg_cache->num_regs *
 					max_reg_name_len);
 		}
-		r->value = info->reg_cache_values[number];
+		r->value = calloc(1, DIV_ROUND_UP(r->size, 8));
 	}
 
 	return ERROR_OK;

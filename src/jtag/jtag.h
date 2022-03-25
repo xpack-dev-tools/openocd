@@ -135,6 +135,9 @@ struct jtag_tap {
 	/** Flag saying whether to ignore version field in expected_ids[] */
 	bool ignore_version;
 
+	/** Flag saying whether to ignore the bypass bit in the code */
+	bool ignore_bypass;
+
 	/** current instruction */
 	uint8_t *cur_instr;
 	/** Bypass register selected */
@@ -543,7 +546,8 @@ int jtag_srst_asserted(int *srst_asserted);
  * @param field Pointer to scan field.
  * @param value Pointer to scan value.
  * @param mask Pointer to scan mask; may be NULL.
- * @returns Nothing, but calls jtag_set_error() on any error.
+ *
+ * returns Nothing, but calls jtag_set_error() on any error.
  */
 void jtag_check_value_mask(struct scan_field *field, uint8_t *value, uint8_t *mask);
 

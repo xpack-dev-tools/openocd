@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include "helper/replacements.h"
+#include <server/server.h>
 
 /*
  * According to:
@@ -75,7 +76,13 @@ enum semihosting_operation_numbers {
 	SEMIHOSTING_SYS_WRITE = 0x05,
 	SEMIHOSTING_SYS_WRITEC = 0x03,
 	SEMIHOSTING_SYS_WRITE0 = 0x04,
+	SEMIHOSTING_USER_CMD_0x100 = 0x100, /* First user cmd op code */
+	SEMIHOSTING_USER_CMD_0x107 = 0x107, /* Last supported user cmd op code */
+	SEMIHOSTING_USER_CMD_0x1FF = 0x1FF, /* Last user cmd op code */
 };
+
+/** Maximum allowed Tcl command segment length in bytes*/
+#define SEMIHOSTING_MAX_TCL_COMMAND_FIELD_LENGTH (1024 * 1024)
 
 /*
  * Codes used by SEMIHOSTING_SYS_EXIT (formerly
@@ -89,6 +96,13 @@ enum semihosting_reported_exceptions {
 	ADP_STOPPED_RUN_TIME_ERROR = ((2 << 16) + 35),
 };
 
+enum semihosting_redirect_config {
+	SEMIHOSTING_REDIRECT_CFG_NONE,
+	SEMIHOSTING_REDIRECT_CFG_DEBUG,
+	SEMIHOSTING_REDIRECT_CFG_STDIO,
+	SEMIHOSTING_REDIRECT_CFG_ALL,
+};
+
 struct target;
 
 /*
@@ -98,6 +112,15 @@ struct semihosting {
 
 	/** A flag reporting whether semihosting is active. */
 	bool is_active;
+
+	/** Semihosting STDIO file descriptors */
+	int stdin_fd, stdout_fd, stderr_fd;
+
+	/** redirection configuration, NONE by default */
+	enum semihosting_redirect_config redirect_cfg;
+
+	/** Handle to redirect semihosting print via tcp */
+	struct connection *tcp_connection;
 
 	/** A flag reporting whether semihosting fileio is active. */
 	bool is_fileio;

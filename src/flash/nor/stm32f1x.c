@@ -592,10 +592,7 @@ static int stm32x_write(struct flash_bank *bank, const uint8_t *buffer,
 		LOG_WARNING("couldn't use block writes, falling back to single memory accesses");
 
 		while (words_remaining > 0) {
-			uint16_t value;
-			memcpy(&value, buffer, sizeof(uint16_t));
-
-			retval = target_write_u16(target, bank->base + offset, value);
+			retval = target_write_memory(target, bank->base + offset, 2, 1, buffer);
 			if (retval != ERROR_OK)
 				goto reset_pg_and_lock;
 
@@ -622,15 +619,14 @@ cleanup:
 static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 {
 	struct target *target = bank->target;
-	struct cortex_m_common *cortex_m = target_to_cm(target);
 	uint32_t device_id_register = 0;
 
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
-		return ERROR_FAIL;
+		return ERROR_TARGET_NOT_EXAMINED;
 	}
 
-	switch (cortex_m->core_info->partno) {
+	switch (cortex_m_get_partno_safe(target)) {
 	case CORTEX_M0_PARTNO: /* STM32F0x devices */
 		device_id_register = 0x40015800;
 		break;
@@ -659,15 +655,14 @@ static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 static int stm32x_get_flash_size(struct flash_bank *bank, uint16_t *flash_size_in_kb)
 {
 	struct target *target = bank->target;
-	struct cortex_m_common *cortex_m = target_to_cm(target);
 	uint32_t flash_size_reg;
 
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
-		return ERROR_FAIL;
+		return ERROR_TARGET_NOT_EXAMINED;
 	}
 
-	switch (cortex_m->core_info->partno) {
+	switch (cortex_m_get_partno_safe(target)) {
 	case CORTEX_M0_PARTNO: /* STM32F0x devices */
 		flash_size_reg = 0x1FFFF7CC;
 		break;

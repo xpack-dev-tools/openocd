@@ -639,14 +639,11 @@ static int cortex_a_dpm_setup(struct cortex_a_common *a, uint32_t didr)
 static struct target *get_cortex_a(struct target *target, int32_t coreid)
 {
 	struct target_list *head;
-	struct target *curr;
 
-	head = target->head;
-	while (head) {
-		curr = head->target;
+	foreach_smp_target(head, target->smp_targets) {
+		struct target *curr = head->target;
 		if ((curr->coreid == coreid) && (curr->state == TARGET_HALTED))
 			return curr;
-		head = head->next;
 	}
 	return target;
 }
@@ -656,14 +653,12 @@ static int cortex_a_halt_smp(struct target *target)
 {
 	int retval = 0;
 	struct target_list *head;
-	struct target *curr;
-	head = target->head;
-	while (head) {
-		curr = head->target;
+
+	foreach_smp_target(head, target->smp_targets) {
+		struct target *curr = head->target;
 		if ((curr != target) && (curr->state != TARGET_HALTED)
 			&& target_was_examined(curr))
 			retval += cortex_a_halt(curr);
-		head = head->next;
 	}
 	return retval;
 }
@@ -684,7 +679,7 @@ static int update_halt_gdb(struct target *target)
 	if (target->gdb_service)
 		gdb_target = target->gdb_service->target;
 
-	foreach_smp_target(head, target->head) {
+	foreach_smp_target(head, target->smp_targets) {
 		curr = head->target;
 		/* skip calling context */
 		if (curr == target)
@@ -951,11 +946,10 @@ static int cortex_a_restore_smp(struct target *target, int handle_breakpoints)
 {
 	int retval = 0;
 	struct target_list *head;
-	struct target *curr;
 	target_addr_t address;
-	head = target->head;
-	while (head) {
-		curr = head->target;
+
+	foreach_smp_target(head, target->smp_targets) {
+		struct target *curr = head->target;
 		if ((curr != target) && (curr->state != TARGET_RUNNING)
 			&& target_was_examined(curr)) {
 			/*  resume current address , not in step mode */
@@ -963,8 +957,6 @@ static int cortex_a_restore_smp(struct target *target, int handle_breakpoints)
 					handle_breakpoints, 0);
 			retval += cortex_a_internal_restart(curr);
 		}
-		head = head->next;
-
 	}
 	return retval;
 }
@@ -1193,7 +1185,7 @@ static int cortex_a_step(struct target *target, int current, target_addr_t addre
 	stepbreakpoint.length = (arm->core_state == ARM_STATE_THUMB)
 		? 2 : 4;
 	stepbreakpoint.type = BKPT_HARD;
-	stepbreakpoint.set = 0;
+	stepbreakpoint.is_set = false;
 
 	/* Disable interrupts during single step if requested */
 	if (cortex_a->isrmasking_mode == CORTEX_A_ISRMASK_ON) {
@@ -1273,7 +1265,7 @@ static int cortex_a_set_breakpoint(struct target *target,
 	struct armv7a_common *armv7a = &cortex_a->armv7a_common;
 	struct cortex_a_brp *brp_list = cortex_a->brp_list;
 
-	if (breakpoint->set) {
+	if (breakpoint->is_set) {
 		LOG_WARNING("breakpoint already set");
 		return ERROR_OK;
 	}
@@ -1285,7 +1277,7 @@ static int cortex_a_set_breakpoint(struct target *target,
 			LOG_ERROR("ERROR Can not find free Breakpoint Register Pair");
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
-		breakpoint->set = brp_i + 1;
+		breakpoint_hw_set(breakpoint, brp_i);
 		if (breakpoint->length == 2)
 			byte_addr_select = (3 << (breakpoint->address & 0x02));
 		control = ((matchmode & 0x7) << 20)
@@ -1350,7 +1342,7 @@ static int cortex_a_set_breakpoint(struct target *target,
 		armv7a_l1_i_cache_inval_virt(target, breakpoint->address,
 						 breakpoint->length);
 
-		breakpoint->set = 0x11;	/* Any nice value but 0 */
+		breakpoint->is_set = true;
 	}
 
 	return ERROR_OK;
@@ -1367,7 +1359,7 @@ static int cortex_a_set_context_breakpoint(struct target *target,
 	struct armv7a_common *armv7a = &cortex_a->armv7a_common;
 	struct cortex_a_brp *brp_list = cortex_a->brp_list;
 
-	if (breakpoint->set) {
+	if (breakpoint->is_set) {
 		LOG_WARNING("breakpoint already set");
 		return retval;
 	}
@@ -1381,7 +1373,7 @@ static int cortex_a_set_context_breakpoint(struct target *target,
 		return ERROR_FAIL;
 	}
 
-	breakpoint->set = brp_i + 1;
+	breakpoint_hw_set(breakpoint, brp_i);
 	control = ((matchmode & 0x7) << 20)
 		| (byte_addr_select << 5)
 		| (3 << 1) | 1;
@@ -1419,7 +1411,7 @@ static int cortex_a_set_hybrid_breakpoint(struct target *target, struct breakpoi
 	struct armv7a_common *armv7a = &cortex_a->armv7a_common;
 	struct cortex_a_brp *brp_list = cortex_a->brp_list;
 
-	if (breakpoint->set) {
+	if (breakpoint->is_set) {
 		LOG_WARNING("breakpoint already set");
 		return retval;
 	}
@@ -1444,7 +1436,7 @@ static int cortex_a_set_hybrid_breakpoint(struct target *target, struct breakpoi
 		return ERROR_FAIL;
 	}
 
-	breakpoint->set = brp_1 + 1;
+	breakpoint_hw_set(breakpoint, brp_1);
 	breakpoint->linked_brp = brp_2;
 	control_ctx = ((ctx_machmode & 0x7) << 20)
 		| (brp_2 << 16)
@@ -1493,16 +1485,16 @@ static int cortex_a_unset_breakpoint(struct target *target, struct breakpoint *b
 	struct armv7a_common *armv7a = &cortex_a->armv7a_common;
 	struct cortex_a_brp *brp_list = cortex_a->brp_list;
 
-	if (!breakpoint->set) {
+	if (!breakpoint->is_set) {
 		LOG_WARNING("breakpoint not set");
 		return ERROR_OK;
 	}
 
 	if (breakpoint->type == BKPT_HARD) {
 		if ((breakpoint->address != 0) && (breakpoint->asid != 0)) {
-			int brp_i = breakpoint->set - 1;
+			int brp_i = breakpoint->number;
 			int brp_j = breakpoint->linked_brp;
-			if ((brp_i < 0) || (brp_i >= cortex_a->brp_num)) {
+			if (brp_i >= cortex_a->brp_num) {
 				LOG_DEBUG("Invalid BRP number in breakpoint");
 				return ERROR_OK;
 			}
@@ -1541,12 +1533,12 @@ static int cortex_a_unset_breakpoint(struct target *target, struct breakpoint *b
 			if (retval != ERROR_OK)
 				return retval;
 			breakpoint->linked_brp = 0;
-			breakpoint->set = 0;
+			breakpoint->is_set = false;
 			return ERROR_OK;
 
 		} else {
-			int brp_i = breakpoint->set - 1;
-			if ((brp_i < 0) || (brp_i >= cortex_a->brp_num)) {
+			int brp_i = breakpoint->number;
+			if (brp_i >= cortex_a->brp_num) {
 				LOG_DEBUG("Invalid BRP number in breakpoint");
 				return ERROR_OK;
 			}
@@ -1565,7 +1557,7 @@ static int cortex_a_unset_breakpoint(struct target *target, struct breakpoint *b
 					brp_list[brp_i].value);
 			if (retval != ERROR_OK)
 				return retval;
-			breakpoint->set = 0;
+			breakpoint->is_set = false;
 			return ERROR_OK;
 		}
 	} else {
@@ -1597,7 +1589,7 @@ static int cortex_a_unset_breakpoint(struct target *target, struct breakpoint *b
 		armv7a_l1_i_cache_inval_virt(target, breakpoint->address,
 						 breakpoint->length);
 	}
-	breakpoint->set = 0;
+	breakpoint->is_set = false;
 
 	return ERROR_OK;
 }
@@ -1663,7 +1655,7 @@ static int cortex_a_remove_breakpoint(struct target *target, struct breakpoint *
 	}
 #endif
 
-	if (breakpoint->set) {
+	if (breakpoint->is_set) {
 		cortex_a_unset_breakpoint(target, breakpoint);
 		if (breakpoint->type == BKPT_HARD)
 			cortex_a->brp_num_available++;
@@ -1696,7 +1688,7 @@ static int cortex_a_set_watchpoint(struct target *target, struct watchpoint *wat
 	struct armv7a_common *armv7a = &cortex_a->armv7a_common;
 	struct cortex_a_wrp *wrp_list = cortex_a->wrp_list;
 
-	if (watchpoint->set) {
+	if (watchpoint->is_set) {
 		LOG_WARNING("watchpoint already set");
 		return retval;
 	}
@@ -1749,7 +1741,7 @@ static int cortex_a_set_watchpoint(struct target *target, struct watchpoint *wat
 		break;
 	}
 
-	watchpoint->set = wrp_i + 1;
+	watchpoint_set(watchpoint, wrp_i);
 	control = (address_mask << 24) |
 		(byte_address_select << 5) |
 		(load_store_access_control << 3) |
@@ -1792,13 +1784,13 @@ static int cortex_a_unset_watchpoint(struct target *target, struct watchpoint *w
 	struct armv7a_common *armv7a = &cortex_a->armv7a_common;
 	struct cortex_a_wrp *wrp_list = cortex_a->wrp_list;
 
-	if (!watchpoint->set) {
+	if (!watchpoint->is_set) {
 		LOG_WARNING("watchpoint not set");
 		return ERROR_OK;
 	}
 
-	int wrp_i = watchpoint->set - 1;
-	if (wrp_i < 0 || wrp_i >= cortex_a->wrp_num) {
+	int wrp_i = watchpoint->number;
+	if (wrp_i >= cortex_a->wrp_num) {
 		LOG_DEBUG("Invalid WRP number in watchpoint");
 		return ERROR_OK;
 	}
@@ -1817,7 +1809,7 @@ static int cortex_a_unset_watchpoint(struct target *target, struct watchpoint *w
 			wrp_list[wrp_i].value);
 	if (retval != ERROR_OK)
 		return retval;
-	watchpoint->set = 0;
+	watchpoint->is_set = false;
 
 	return ERROR_OK;
 }
@@ -1859,7 +1851,7 @@ static int cortex_a_remove_watchpoint(struct target *target, struct watchpoint *
 {
 	struct cortex_a_common *cortex_a = target_to_cortex_a(target);
 
-	if (watchpoint->set) {
+	if (watchpoint->is_set) {
 		cortex_a->wrp_num_available++;
 		cortex_a_unset_watchpoint(target, watchpoint);
 	}
