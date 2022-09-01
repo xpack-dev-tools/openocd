@@ -34,7 +34,7 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 		bool step, bool use_hasel);
 static void riscv013_clear_abstract_error(struct target *target);
 
-/* Implementations of the functions in riscv_info_t. */
+/* Implementations of the functions in struct riscv_info. */
 static int riscv013_get_register(struct target *target,
 		riscv_reg_t *value, int rid);
 static int riscv013_set_register(struct target *target, int regid, uint64_t value);
@@ -225,10 +225,10 @@ LIST_HEAD(dm_list);
 
 static riscv013_info_t *get_info(const struct target *target)
 {
-	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	struct riscv_info *info = target->arch_info;
 	assert(info);
 	assert(info->version_specific);
-	return (riscv013_info_t *) info->version_specific;
+	return info->version_specific;
 }
 
 /**
@@ -1524,7 +1524,10 @@ static int wait_for_authbusy(struct target *target, uint32_t *dmstatus)
 static void deinit_target(struct target *target)
 {
 	LOG_DEBUG("riscv_deinit_target()");
-	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	struct riscv_info *info = target->arch_info;
+	if (!info)
+		return;
+
 	free(info->version_specific);
 	/* TODO: free register arch_info */
 	info->version_specific = NULL;
@@ -2397,11 +2400,11 @@ static int deassert_reset(struct target *target)
 	select_dmi(target);
 
 	/* Clear the reset, but make sure haltreq is still set */
-	uint32_t control = 0;
-	control = set_field(control, DM_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
+	uint32_t control = 0, control_haltreq;
 	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
+	control_haltreq = set_field(control, DM_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
 	dmi_write(target, DM_DMCONTROL,
-			set_hartsel(control, r->current_hartid));
+			set_hartsel(control_haltreq, r->current_hartid));
 
 	uint32_t dmstatus;
 	int dmi_busy_delay = info->dmi_busy_delay;
@@ -2413,7 +2416,7 @@ static int deassert_reset(struct target *target)
 			if (index != target->coreid)
 				continue;
 			dmi_write(target, DM_DMCONTROL,
-					set_hartsel(control, index));
+					set_hartsel(control_haltreq, index));
 		} else {
 			index = r->current_hartid;
 		}
@@ -2449,7 +2452,7 @@ static int deassert_reset(struct target *target)
 		target->state = TARGET_HALTED;
 
 		if (get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET)) {
-			/* Ack reset. */
+			/* Ack reset and clear DM_DMCONTROL_HALTREQ if previously set */
 			dmi_write(target, DM_DMCONTROL,
 					set_hartsel(control, index) |
 					DM_DMCONTROL_ACKHAVERESET);
@@ -4173,7 +4176,7 @@ static int select_prepped_harts(struct target *target, bool *use_hasel)
 	unsigned total_selected = 0;
 	list_for_each_entry(entry, &dm->target_list, list) {
 		struct target *t = entry->target;
-		riscv_info_t *r = riscv_info(t);
+		struct riscv_info *r = riscv_info(t);
 		riscv013_info_t *info = get_info(t);
 		unsigned index = info->index;
 		LOG_DEBUG("index=%d, coreid=%d, prepped=%d", index, t->coreid, r->prepped);

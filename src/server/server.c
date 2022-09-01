@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -7,19 +9,6 @@
  *                                                                         *
  *   Copyright (C) 2008 by Spencer Oliver                                  *
  *   spen@spen-soft.co.uk                                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -484,7 +473,7 @@ int server_loop(struct command_context *command_context)
 			tv.tv_usec = 0;
 			retval = socket_select(fd_max + 1, &read_fds, NULL, NULL, &tv);
 		} else {
-			/* Every 100ms, can be changed with "poll_period" command */
+			/* Timeout socket_select() when a target timer expires or every polling_period */
 			int timeout_ms = next_event - timeval_ms();
 			if (timeout_ms < 0)
 				timeout_ms = 0;
@@ -518,9 +507,12 @@ int server_loop(struct command_context *command_context)
 		}
 
 		if (retval == 0) {
-			/* We only execute these callbacks when there was nothing to do or we timed
-			 *out */
-			target_call_timer_callbacks_now();
+			/* Execute callbacks of expired timers when
+			 * - there was nothing to do if poll_ok was true
+			 * - socket_select() timed out if poll_ok was false, now one or more
+			 *   timers expired or the polling period elapsed
+			 */
+			target_call_timer_callbacks();
 			next_event = target_timer_next_event();
 			process_jim_events(command_context);
 
@@ -761,6 +753,8 @@ COMMAND_HANDLER(handle_shutdown_command)
 	LOG_USER("shutdown command invoked");
 
 	shutdown_openocd = SHUTDOWN_REQUESTED;
+
+	command_run_line(CMD_CTX, "_run_pre_shutdown_commands");
 
 	if (CMD_ARGC == 1) {
 		if (!strcmp(CMD_ARGV[0], "error")) {

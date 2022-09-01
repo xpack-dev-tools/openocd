@@ -1,22 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2018 by Liviu Ionescu                                   *
  *   <ilg@livius.net>                                                      *
  *                                                                         *
  *   Copyright (C) 2009 by Marvell Technology Group Ltd.                   *
  *   Written by Nicolas Pitre <nico@marvell.com>                           *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifndef OPENOCD_TARGET_SEMIHOSTING_COMMON_H
@@ -103,6 +92,13 @@ enum semihosting_redirect_config {
 	SEMIHOSTING_REDIRECT_CFG_ALL,
 };
 
+enum semihosting_result {
+	SEMIHOSTING_NONE,		/* Not halted for a semihosting call. */
+	SEMIHOSTING_HANDLED,	/* Call handled, and target was resumed. */
+	SEMIHOSTING_WAITING,	/* Call handled, target is halted waiting until we can resume. */
+	SEMIHOSTING_ERROR		/* Something went wrong. */
+};
+
 struct target;
 
 /*
@@ -176,6 +172,16 @@ struct semihosting {
 	/** The current time when 'execution starts' */
 	clock_t setup_time;
 
+	/** Base directory for semihosting I/O operations. */
+	char *basedir;
+
+	/**
+	 * Target's extension of semihosting user commands.
+	 * @returns ERROR_NOT_IMPLEMENTED when user command is not handled, otherwise
+	 * sets semihosting->result and semihosting->sys_errno and returns ERROR_OK.
+	 */
+	int (*user_command_extension)(struct target *target);
+
 	int (*setup)(struct target *target, int enable);
 	int (*post_result)(struct target *target);
 };
@@ -183,5 +189,18 @@ struct semihosting {
 int semihosting_common_init(struct target *target, void *setup,
 	void *post_result);
 int semihosting_common(struct target *target);
+
+/* utility functions which may also be used by semihosting extensions (custom vendor-defined syscalls) */
+int semihosting_read_fields(struct target *target, size_t number,
+	uint8_t *fields);
+int semihosting_write_fields(struct target *target, size_t number,
+	uint8_t *fields);
+uint64_t semihosting_get_field(struct target *target, size_t index,
+	uint8_t *fields);
+void semihosting_set_field(struct target *target, uint64_t value,
+	size_t index,
+	uint8_t *fields);
+
+extern const struct command_registration semihosting_common_handlers[];
 
 #endif	/* OPENOCD_TARGET_SEMIHOSTING_COMMON_H */

@@ -1,22 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2015 by Uwe Bonnes                                      *
  *   bon@elektron.ikp.physik.tu-darmstadt.de                               *
  *                                                                         *
  *   Copyright (C) 2019 by Tarek Bochkati for STMicroelectronics           *
  *   tarek.bouchkati@gmail.com                                             *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -1078,7 +1067,7 @@ static int stm32l4_get_all_wrpxy(struct flash_bank *bank, enum stm32_bank_id dev
 	if (dev_bank_id != STM32_BANK1 && stm32l4_info->dual_bank_mode)
 		wrp2y_sectors_offset = stm32l4_info->bank1_sectors;
 
-	if (wrp2y_sectors_offset > -1) {
+	if (wrp2y_sectors_offset >= 0) {
 		/* get WRP2AR */
 		ret = stm32l4_get_one_wrpxy(bank, &wrpxy[(*n_wrp)++], STM32_FLASH_WRP2AR_INDEX, wrp2y_sectors_offset);
 		if (ret != ERROR_OK)
@@ -1220,48 +1209,10 @@ err_lock:
 	return retval2;
 }
 
-static int stm32l4_protect(struct flash_bank *bank, int set, unsigned int first, unsigned int last)
+static int stm32l4_protect_same_bank(struct flash_bank *bank, enum stm32_bank_id bank_id, int set,
+		unsigned int first, unsigned int last)
 {
-	struct target *target = bank->target;
-	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
-	int ret = ERROR_OK;
 	unsigned int i;
-
-	if (stm32l4_is_otp(bank)) {
-		LOG_ERROR("cannot protect/unprotect OTP memory");
-		return ERROR_FLASH_OPER_UNSUPPORTED;
-	}
-
-	if (target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
-	}
-
-	/* the requested sectors could be located into bank1 and/or bank2 */
-	bool use_bank2 = false;
-	if (last >= stm32l4_info->bank1_sectors) {
-		if (first < stm32l4_info->bank1_sectors) {
-			/* the requested sectors for (un)protection are shared between
-			 * bank 1 and 2, then split the operation */
-
-			/*  1- deal with bank 1 sectors */
-			LOG_DEBUG("The requested sectors for %s are shared between bank 1 and 2",
-					set ? "protection" : "unprotection");
-			ret = stm32l4_protect(bank, set, first, stm32l4_info->bank1_sectors - 1);
-			if (ret != ERROR_OK)
-				return ret;
-
-			/*  2- then continue with bank 2 sectors */
-			first = stm32l4_info->bank1_sectors;
-		}
-
-		use_bank2 = true;
-	}
-
-	/* refresh the sectors' protection */
-	ret = stm32l4_protect_check(bank);
-	if (ret != ERROR_OK)
-		return ret;
 
 	/* check if the desired protection is already configured */
 	for (i = first; i <= last; i++) {
@@ -1278,7 +1229,7 @@ static int stm32l4_protect(struct flash_bank *bank, int set, unsigned int first,
 	unsigned int n_wrp;
 	struct stm32l4_wrp wrpxy[4];
 
-	ret = stm32l4_get_all_wrpxy(bank, use_bank2 ? STM32_BANK2 : STM32_BANK1, wrpxy, &n_wrp);
+	int ret = stm32l4_get_all_wrpxy(bank, bank_id, wrpxy, &n_wrp);
 	if (ret != ERROR_OK)
 		return ret;
 
@@ -1347,6 +1298,40 @@ static int stm32l4_protect(struct flash_bank *bank, int set, unsigned int first,
 
 	/* finally write WRPxy registers */
 	return stm32l4_write_all_wrpxy(bank, wrpxy, n_wrp);
+}
+
+static int stm32l4_protect(struct flash_bank *bank, int set, unsigned int first, unsigned int last)
+{
+	struct target *target = bank->target;
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+
+	if (stm32l4_is_otp(bank)) {
+		LOG_ERROR("cannot protect/unprotect OTP memory");
+		return ERROR_FLASH_OPER_UNSUPPORTED;
+	}
+
+	if (target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	/* refresh the sectors' protection */
+	int ret = stm32l4_protect_check(bank);
+	if (ret != ERROR_OK)
+		return ret;
+
+	/* the requested sectors could be located into bank1 and/or bank2 */
+	if (last < stm32l4_info->bank1_sectors) {
+		return stm32l4_protect_same_bank(bank, STM32_BANK1, set, first, last);
+	} else if (first >= stm32l4_info->bank1_sectors) {
+		return stm32l4_protect_same_bank(bank, STM32_BANK2, set, first, last);
+	} else {
+		ret = stm32l4_protect_same_bank(bank, STM32_BANK1, set, first, stm32l4_info->bank1_sectors - 1);
+		if (ret != ERROR_OK)
+			return ret;
+
+		return stm32l4_protect_same_bank(bank, STM32_BANK2, set, stm32l4_info->bank1_sectors, last);
+	}
 }
 
 /* count is the size divided by stm32l4_info->data_width */
@@ -1831,7 +1816,7 @@ static int stm32l4_probe(struct flash_bank *bank)
 		flash_size_kb = stm32l4_info->user_bank_size / 1024;
 	}
 
-	LOG_INFO("flash size = %dkbytes", flash_size_kb);
+	LOG_INFO("flash size = %d KiB", flash_size_kb);
 
 	/* did we assign a flash size? */
 	assert((flash_size_kb != 0xffff) && flash_size_kb);
@@ -1984,6 +1969,15 @@ static int stm32l4_probe(struct flash_bank *bank)
 		break;
 	default:
 		LOG_ERROR("unsupported device");
+		return ERROR_FAIL;
+	}
+
+	/* ensure that at least there is 1 flash sector / page */
+	if (num_pages == 0) {
+		if (stm32l4_info->user_bank_size)
+			LOG_ERROR("The specified flash size is less than page size");
+
+		LOG_ERROR("Flash pages count cannot be zero");
 		return ERROR_FAIL;
 	}
 

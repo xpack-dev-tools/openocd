@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -7,19 +9,6 @@
  *                                                                         *
  *   Copyright (C) 2008 by Spencer Oliver                                  *
  *   spen@spen-soft.co.uk                                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifndef OPENOCD_TARGET_ARMV7M_H
@@ -226,12 +215,13 @@ enum {
 
 #define ARMV7M_NUM_CORE_REGS (ARMV7M_CORE_LAST_REG - ARMV7M_CORE_FIRST_REG + 1)
 
-#define ARMV7M_COMMON_MAGIC 0x2A452A45
+#define ARMV7M_COMMON_MAGIC 0x2A452A45U
 
 struct armv7m_common {
+	unsigned int common_magic;
+
 	struct arm arm;
 
-	int common_magic;
 	int exception_number;
 
 	/* AP this processor is connected to in the DAP */
@@ -300,7 +290,7 @@ target_to_armv7m_safe(struct target *target)
 }
 
 struct armv7m_algorithm {
-	int common_magic;
+	unsigned int common_magic;
 
 	enum arm_mode core_mode;
 

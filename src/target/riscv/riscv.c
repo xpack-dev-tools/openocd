@@ -405,13 +405,12 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 
 static struct target_type *get_target_type(struct target *target)
 {
-	riscv_info_t *info = (riscv_info_t *) target->arch_info;
-
-	if (!info) {
+	if (!target->arch_info) {
 		LOG_ERROR("Target has not been initialized");
 		return NULL;
 	}
 
+	RISCV_INFO(info);
 	switch (info->dtm_version) {
 		case 0:
 			return &riscv011_target;
@@ -426,7 +425,7 @@ static struct target_type *get_target_type(struct target *target)
 static int riscv_create_target(struct target *target, Jim_Interp *interp)
 {
 	LOG_DEBUG("riscv_create_target()");
-	target->arch_info = calloc(1, sizeof(riscv_info_t));
+	target->arch_info = calloc(1, sizeof(struct riscv_info));
 	if (!target->arch_info) {
 		LOG_ERROR("Failed to allocate RISC-V target structure.");
 		return ERROR_FAIL;
@@ -489,13 +488,16 @@ static void riscv_deinit_target(struct target *target)
 {
 	LOG_DEBUG("riscv_deinit_target()");
 
-	riscv_info_t *info = target->arch_info;
+	struct riscv_info *info = target->arch_info;
 	struct target_type *tt = get_target_type(target);
 
-	if (tt && info->version_specific)
+	if (tt && info && info->version_specific)
 		tt->deinit_target(target);
 
 	riscv_free_registers(target);
+
+	if (!info)
+		return;
 
 	range_list_t *entry, *tmp;
 	list_for_each_entry_safe(entry, tmp, &info->expose_csr, list) {
@@ -1200,7 +1202,7 @@ int riscv_halt_go_all_harts(struct target *target)
 
 int halt_go(struct target *target)
 {
-	riscv_info_t *r = riscv_info(target);
+	RISCV_INFO(r);
 	int result;
 	if (!r->is_halted) {
 		struct target_type *tt = get_target_type(target);
@@ -1242,7 +1244,7 @@ int riscv_halt(struct target *target)
 
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			riscv_info_t *i = riscv_info(t);
+			struct riscv_info *i = riscv_info(t);
 			if (i->prepped) {
 				if (halt_go(t) != ERROR_OK)
 					result = ERROR_FAIL;
@@ -1434,7 +1436,7 @@ static int resume_prep(struct target *target, int current,
 static int resume_go(struct target *target, int current,
 		target_addr_t address, int handle_breakpoints, int debug_execution)
 {
-	riscv_info_t *r = riscv_info(target);
+	RISCV_INFO(r);
 	int result;
 	if (!r->is_halted) {
 		struct target_type *tt = get_target_type(target);
@@ -1483,7 +1485,7 @@ int riscv_resume(
 		foreach_smp_target_direction(resume_order == RO_NORMAL,
 									 tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			riscv_info_t *i = riscv_info(t);
+			struct riscv_info *i = riscv_info(t);
 			if (i->prepped) {
 				if (resume_go(t, current, address, handle_breakpoints,
 							debug_execution) != ERROR_OK)
@@ -2189,7 +2191,7 @@ int riscv_openocd_poll(struct target *target)
 		struct target_list *list;
 		foreach_smp_target(list, target->smp_targets) {
 			struct target *t = list->target;
-			riscv_info_t *r = riscv_info(t);
+			struct riscv_info *r = riscv_info(t);
 			enum riscv_poll_hart out = riscv_poll_hart(t, r->current_hartid);
 			switch (out) {
 			case RPH_NO_CHANGE:
@@ -2209,17 +2211,17 @@ int riscv_openocd_poll(struct target *target)
 				if (halt_reason == RISCV_HALT_BREAKPOINT) {
 					int retval;
 					switch (riscv_semihosting(t, &retval)) {
-					case SEMI_NONE:
-					case SEMI_WAITING:
+					case SEMIHOSTING_NONE:
+					case SEMIHOSTING_WAITING:
 						/* This hart should remain halted. */
 						should_remain_halted++;
 						break;
-					case SEMI_HANDLED:
+					case SEMIHOSTING_HANDLED:
 						/* This hart should be resumed, along with any other
 							 * harts that halted due to haltgroups. */
 						should_resume++;
 						break;
-					case SEMI_ERROR:
+					case SEMIHOSTING_ERROR:
 						return retval;
 					}
 				} else if (halt_reason != RISCV_HALT_GROUP) {
@@ -2280,15 +2282,15 @@ int riscv_openocd_poll(struct target *target)
 	if (target->debug_reason == DBG_REASON_BREAKPOINT) {
 		int retval;
 		switch (riscv_semihosting(target, &retval)) {
-			case SEMI_NONE:
-			case SEMI_WAITING:
+			case SEMIHOSTING_NONE:
+			case SEMIHOSTING_WAITING:
 				target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 				break;
-			case SEMI_HANDLED:
+			case SEMIHOSTING_HANDLED:
 				if (riscv_resume(target, true, 0, 0, 0, false) != ERROR_OK)
 					return ERROR_FAIL;
 				break;
-			case SEMI_ERROR:
+			case SEMIHOSTING_ERROR:
 				return retval;
 		}
 	} else {
@@ -3114,7 +3116,6 @@ static const struct command_registration riscv_exec_command_handlers[] = {
  * protocol, then a command like `riscv semihosting enable` will make
  * sense, but for now all semihosting commands are prefixed with `arm`.
  */
-extern const struct command_registration semihosting_common_handlers[];
 
 const struct command_registration riscv_command_handlers[] = {
 	{
@@ -3198,11 +3199,13 @@ struct target_type riscv_target = {
 
 /*** RISC-V Interface ***/
 
-void riscv_info_init(struct target *target, riscv_info_t *r)
+void riscv_info_init(struct target *target, struct riscv_info *r)
 {
 	memset(r, 0, sizeof(*r));
+
+	r->common_magic = RISCV_COMMON_MAGIC;
+
 	r->dtm_version = 1;
-	r->registers_initialized = false;
 	r->current_hartid = target->coreid;
 	r->version_specific = NULL;
 
@@ -3301,16 +3304,12 @@ int riscv_set_current_hartid(struct target *target, int hartid)
 
 void riscv_invalidate_register_cache(struct target *target)
 {
-	RISCV_INFO(r);
-
 	LOG_DEBUG("[%d]", target->coreid);
 	register_cache_invalidate(target->reg_cache);
 	for (size_t i = 0; i < target->reg_cache->num_regs; ++i) {
 		struct reg *reg = &target->reg_cache->reg_list[i];
 		reg->valid = false;
 	}
-
-	r->registers_initialized = true;
 }
 
 int riscv_current_hartid(const struct target *target)

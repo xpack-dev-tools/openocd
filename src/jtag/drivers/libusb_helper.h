@@ -1,26 +1,29 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2009 by Zachary T Welch <zw@superlucidity.net>          *
  *                                                                         *
  *   Copyright (C) 2011 by Mauro Gamba <maurillo71@gmail.com>              *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifndef OPENOCD_JTAG_DRIVERS_LIBUSB_HELPER_H
 #define OPENOCD_JTAG_DRIVERS_LIBUSB_HELPER_H
 
 #include <libusb.h>
+
+/* When we debug a target that works as a USB device, halting the target causes the
+ * USB communication with the USB host to become unresponsive. The host will try
+ * to reconnect/reset/setup the unresponsive device during which communication
+ * with other devices on the same USB bus can get stalled for several seconds.
+ * If the JTAG adapter is on the same bus, we need to make sure openOCD will wait
+ * for packets at least as long as the host USB stack. Otherwise the USB stack
+ * might deliver a valid packet, but openOCD would ignore it due to the timeout.
+ * The xHCI spec uses 5 sec timeouts, so let's use that in openOCD with some margin.
+ *
+ * Use this value in all libusb calls. HID API might have a libusb backend and
+ * would probably be victim to the same bug, so it should use this timeout, too.
+ */
+#define LIBUSB_TIMEOUT_MS	(6000)
 
 /* this callback should return a non NULL value only when the serial could not
  * be retrieved by the standard 'libusb_get_string_descriptor_ascii' */

@@ -1,20 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *    Copyright (C) 2009 by David Brownell                                 *
  *                                                                         *
  *    Copyright (C) ST-Ericsson SA 2011 michel.jaouen@stericsson.com       *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -112,7 +101,7 @@ static int armv7a_read_midr(struct target *target)
 	armv7a->arch = (midr >> 16) & 0xf;
 	armv7a->variant = (midr >> 20) & 0xf;
 	armv7a->implementor = (midr >> 24) & 0xff;
-	LOG_INFO("%s rev %" PRIx32 ", partnum %" PRIx32 ", arch %" PRIx32
+	LOG_DEBUG("%s rev %" PRIx32 ", partnum %" PRIx32 ", arch %" PRIx32
 			 ", variant %" PRIx32 ", implementor %" PRIx32,
 		 target->cmd_name,
 		 armv7a->rev,

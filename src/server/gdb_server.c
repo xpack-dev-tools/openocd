@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -19,19 +21,6 @@
  *                                                                         *
  *   Copyright (C) 2013 Franck Jullien                                     *
  *   elec4fun@gmail.com                                                    *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -371,10 +360,12 @@ static int gdb_write(struct connection *connection, void *data, int len)
 	return ERROR_SERVER_REMOTE_CLOSED;
 }
 
-static void gdb_log_incoming_packet(char *packet)
+static void gdb_log_incoming_packet(struct connection *connection, char *packet)
 {
 	if (!LOG_LEVEL_IS(LOG_LVL_DEBUG))
 		return;
+
+	struct target *target = get_target_from_connection(connection);
 
 	/* Avoid dumping non-printable characters to the terminal */
 	const unsigned packet_len = strlen(packet);
@@ -389,25 +380,31 @@ static void gdb_log_incoming_packet(char *packet)
 		if (packet_prefix_printable) {
 			const unsigned int prefix_len = colon - packet + 1;  /* + 1 to include the ':' */
 			const unsigned int payload_len = packet_len - prefix_len;
-			LOG_DEBUG("received packet: %.*s<binary-data-%u-bytes>", prefix_len, packet, payload_len);
+			LOG_TARGET_DEBUG(target, "received packet: %.*s<binary-data-%u-bytes>", prefix_len,
+				packet, payload_len);
 		} else {
-			LOG_DEBUG("received packet: <binary-data-%u-bytes>", packet_len);
+			LOG_TARGET_DEBUG(target, "received packet: <binary-data-%u-bytes>", packet_len);
 		}
 	} else {
 		/* All chars printable, dump the packet as is */
-		LOG_DEBUG("received packet: %s", packet);
+		LOG_TARGET_DEBUG(target, "received packet: %s", packet);
 	}
 }
 
-static void gdb_log_outgoing_packet(char *packet_buf, unsigned int packet_len, unsigned char checksum)
+static void gdb_log_outgoing_packet(struct connection *connection, char *packet_buf,
+	unsigned int packet_len, unsigned char checksum)
 {
 	if (!LOG_LEVEL_IS(LOG_LVL_DEBUG))
 		return;
 
+	struct target *target = get_target_from_connection(connection);
+
 	if (find_nonprint_char(packet_buf, packet_len))
-		LOG_DEBUG("sending packet: $<binary-data-%u-bytes>#%2.2x", packet_len, checksum);
+		LOG_TARGET_DEBUG(target, "sending packet: $<binary-data-%u-bytes>#%2.2x",
+			packet_len, checksum);
 	else
-		LOG_DEBUG("sending packet: $%.*s#%2.2x'", packet_len, packet_buf, checksum);
+		LOG_TARGET_DEBUG(target, "sending packet: $%.*s#%2.2x", packet_len, packet_buf,
+			checksum);
 }
 
 static int gdb_put_packet_inner(struct connection *connection,
@@ -450,7 +447,7 @@ static int gdb_put_packet_inner(struct connection *connection,
 #endif
 
 	while (1) {
-		gdb_log_outgoing_packet(buffer, len, my_checksum);
+		gdb_log_outgoing_packet(connection, buffer, len, my_checksum);
 
 		char local_buffer[1024];
 		local_buffer[0] = '$';
@@ -483,22 +480,27 @@ static int gdb_put_packet_inner(struct connection *connection,
 		if (retval != ERROR_OK)
 			return retval;
 
-		if (reply == '+')
+		if (reply == '+') {
+			gdb_log_incoming_packet(connection, "+");
 			break;
-		else if (reply == '-') {
+		} else if (reply == '-') {
 			/* Stop sending output packets for now */
 			gdb_con->output_flag = GDB_OUTPUT_NO;
+			gdb_log_incoming_packet(connection, "-");
 			LOG_WARNING("negative reply, retrying");
 		} else if (reply == 0x3) {
 			gdb_con->ctrl_c = true;
+			gdb_log_incoming_packet(connection, "<Ctrl-C>");
 			retval = gdb_get_char(connection, &reply);
 			if (retval != ERROR_OK)
 				return retval;
-			if (reply == '+')
+			if (reply == '+') {
+				gdb_log_incoming_packet(connection, "+");
 				break;
-			else if (reply == '-') {
+			} else if (reply == '-') {
 				/* Stop sending output packets for now */
 				gdb_con->output_flag = GDB_OUTPUT_NO;
+				gdb_log_incoming_packet(connection, "-");
 				LOG_WARNING("negative reply, retrying");
 			} else if (reply == '$') {
 				LOG_ERROR("GDB missing ack(1) - assumed good");
@@ -675,6 +677,7 @@ static int gdb_get_packet_inner(struct connection *connection,
 				case '$':
 					break;
 				case '+':
+					gdb_log_incoming_packet(connection, "+");
 					/* According to the GDB documentation
 					 * (https://sourceware.org/gdb/onlinedocs/gdb/Packet-Acknowledgment.html):
 					 * "gdb sends a final `+` acknowledgment of the stub's `OK`
@@ -692,9 +695,11 @@ static int gdb_get_packet_inner(struct connection *connection,
 					}
 					break;
 				case '-':
+					gdb_log_incoming_packet(connection, "-");
 					LOG_WARNING("negative acknowledgment, but no packet pending");
 					break;
 				case 0x3:
+					gdb_log_incoming_packet(connection, "<Ctrl-C>");
 					gdb_con->ctrl_c = true;
 					*len = 0;
 					return ERROR_OK;
@@ -1318,6 +1323,8 @@ static int gdb_set_registers_packet(struct connection *connection,
 	packet_p = packet;
 	for (i = 0; i < reg_list_size; i++) {
 		uint8_t *bin_buf;
+		if (!reg_list[i] || !reg_list[i]->exist || reg_list[i]->hidden)
+			continue;
 		int chars = (DIV_ROUND_UP(reg_list[i]->size, 8) * 2);
 
 		if (packet_p + chars > packet + packet_size)
@@ -1370,7 +1377,8 @@ static int gdb_get_register_packet(struct connection *connection,
 	if (retval != ERROR_OK)
 		return gdb_error(connection, retval);
 
-	if (reg_list_size <= reg_num) {
+	if ((reg_list_size <= reg_num) || !reg_list[reg_num] ||
+		!reg_list[reg_num]->exist || reg_list[reg_num]->hidden) {
 		LOG_ERROR("gdb requested a non-existing register (reg_num=%d)", reg_num);
 		return ERROR_SERVER_REMOTE_CLOSED;
 	}
@@ -1432,7 +1440,8 @@ static int gdb_set_register_packet(struct connection *connection,
 		return gdb_error(connection, retval);
 	}
 
-	if (reg_list_size <= reg_num) {
+	if ((reg_list_size <= reg_num) || !reg_list[reg_num] ||
+		!reg_list[reg_num]->exist || reg_list[reg_num]->hidden) {
 		LOG_ERROR("gdb requested a non-existing register (reg_num=%d)", reg_num);
 		free(bin_buf);
 		free(reg_list);
@@ -1765,7 +1774,10 @@ static int gdb_breakpoint_watchpoint_packet(struct connection *connection,
 		case 1:
 			if (packet[0] == 'Z') {
 				retval = breakpoint_add(target, address, size, bp_type);
-				if (retval != ERROR_OK) {
+				if (retval == ERROR_NOT_IMPLEMENTED) {
+					/* Send empty reply to report that breakpoints of this type are not supported */
+					gdb_put_packet(connection, "", 0);
+				} else if (retval != ERROR_OK) {
 					retval = gdb_error(connection, retval);
 					if (retval != ERROR_OK)
 						return retval;
@@ -1782,7 +1794,10 @@ static int gdb_breakpoint_watchpoint_packet(struct connection *connection,
 		{
 			if (packet[0] == 'Z') {
 				retval = watchpoint_add(target, address, size, wp_type, 0, 0xffffffffu);
-				if (retval != ERROR_OK) {
+				if (retval == ERROR_NOT_IMPLEMENTED) {
+					/* Send empty reply to report that watchpoints of this type are not supported */
+					gdb_put_packet(connection, "", 0);
+				} else if (retval != ERROR_OK) {
 					retval = gdb_error(connection, retval);
 					if (retval != ERROR_OK)
 						return retval;
@@ -2734,6 +2749,7 @@ static int gdb_query_packet(struct connection *connection,
 
 	if (strncmp(packet, "qRcmd,", 6) == 0) {
 		if (packet_size > 6) {
+			Jim_Interp *interp = cmd_ctx->interp;
 			char *cmd;
 			cmd = malloc((packet_size - 6) / 2 + 1);
 			size_t len = unhexify((uint8_t *)cmd, packet + 6, (packet_size - 6) / 2);
@@ -2745,11 +2761,63 @@ static int gdb_query_packet(struct connection *connection,
 			/* some commands need to know the GDB connection, make note of current
 			 * GDB connection. */
 			current_gdb_connection = gdb_connection;
-			command_run_line(cmd_ctx, cmd);
+
+			struct target *saved_target_override = cmd_ctx->current_target_override;
+			cmd_ctx->current_target_override = NULL;
+
+			struct command_context *old_context = Jim_GetAssocData(interp, "context");
+			Jim_DeleteAssocData(interp, "context");
+			int retval = Jim_SetAssocData(interp, "context", NULL, cmd_ctx);
+			if (retval == JIM_OK) {
+				retval = Jim_EvalObj(interp, Jim_NewStringObj(interp, cmd, -1));
+				Jim_DeleteAssocData(interp, "context");
+			}
+			int inner_retval = Jim_SetAssocData(interp, "context", NULL, old_context);
+			if (retval == JIM_OK)
+				retval = inner_retval;
+
+			cmd_ctx->current_target_override = saved_target_override;
+
 			current_gdb_connection = NULL;
 			target_call_timer_callbacks_now();
 			gdb_connection->output_flag = GDB_OUTPUT_NO;
 			free(cmd);
+			if (retval == JIM_RETURN)
+				retval = interp->returnCode;
+			int lenmsg;
+			const char *cretmsg = Jim_GetString(Jim_GetResult(interp), &lenmsg);
+			char *retmsg;
+			if (lenmsg && cretmsg[lenmsg - 1] != '\n') {
+				retmsg = alloc_printf("%s\n", cretmsg);
+				lenmsg++;
+			} else {
+				retmsg = strdup(cretmsg);
+			}
+			if (!retmsg)
+				return ERROR_GDB_BUFFER_TOO_SMALL;
+
+			if (retval == JIM_OK) {
+				if (lenmsg) {
+					char *hex_buffer = malloc(lenmsg * 2 + 1);
+					if (!hex_buffer) {
+						free(retmsg);
+						return ERROR_GDB_BUFFER_TOO_SMALL;
+					}
+
+					size_t pkt_len = hexify(hex_buffer, (const uint8_t *)retmsg, lenmsg,
+											lenmsg * 2 + 1);
+					gdb_put_packet(connection, hex_buffer, pkt_len);
+					free(hex_buffer);
+				} else {
+					gdb_put_packet(connection, "OK", 2);
+				}
+			} else {
+				if (lenmsg)
+					gdb_output_con(connection, retmsg);
+				gdb_send_error(connection, retval);
+			}
+			free(retmsg);
+			return ERROR_OK;
 		}
 		gdb_put_packet(connection, "OK", 2);
 		return ERROR_OK;
@@ -2897,6 +2965,11 @@ static int gdb_query_packet(struct connection *connection,
 		gdb_connection->noack_mode = 1;
 		gdb_put_packet(connection, "OK", 2);
 		return ERROR_OK;
+	} else if (target->type->gdb_query_custom) {
+		char *buffer = NULL;
+		int ret = target->type->gdb_query_custom(target, packet, &buffer);
+		gdb_put_packet(connection, buffer, strlen(buffer));
+		return ret;
 	}
 
 	gdb_put_packet(connection, "", 0);
@@ -2957,128 +3030,127 @@ static bool gdb_handle_vcont_packet(struct connection *connection, const char *p
 		gdb_running_type = 's';
 		bool fake_step = false;
 
-		if (strncmp(parse, "s:", 2) == 0) {
-			struct target *ct = target;
-			int current_pc = 1;
-			int64_t thread_id;
+		struct target *ct = target;
+		int current_pc = 1;
+		int64_t thread_id;
+		parse++;
+		packet_size--;
+		if (parse[0] == ':') {
 			char *endp;
-
-			parse += 2;
-			packet_size -= 2;
-
+			parse++;
+			packet_size--;
 			thread_id = strtoll(parse, &endp, 16);
 			if (endp) {
 				packet_size -= endp - parse;
 				parse = endp;
 			}
+		} else {
+			thread_id = 0;
+		}
 
-			if (target->rtos) {
-				/* FIXME: why is this necessary? rtos state should be up-to-date here already! */
-				rtos_update_threads(target);
+		if (target->rtos) {
+			/* FIXME: why is this necessary? rtos state should be up-to-date here already! */
+			rtos_update_threads(target);
 
-				target->rtos->gdb_target_for_threadid(connection, thread_id, &ct);
+			target->rtos->gdb_target_for_threadid(connection, thread_id, &ct);
 
-				/*
-				 * check if the thread to be stepped is the current rtos thread
-				 * if not, we must fake the step
-				 */
-				if (target->rtos->current_thread != thread_id)
-					fake_step = true;
-			}
+			/*
+			 * check if the thread to be stepped is the current rtos thread
+			 * if not, we must fake the step
+			 */
+			if (target->rtos->current_thread != thread_id)
+				fake_step = true;
+		}
 
-			if (parse[0] == ';') {
-				++parse;
-				--packet_size;
+		if (parse[0] == ';') {
+			++parse;
+			--packet_size;
 
-				if (parse[0] == 'c') {
+			if (parse[0] == 'c') {
+				parse += 1;
+
+				/* check if thread-id follows */
+				if (parse[0] == ':') {
+					int64_t tid;
 					parse += 1;
 
-					/* check if thread-id follows */
-					if (parse[0] == ':') {
-						int64_t tid;
-						parse += 1;
-
-						tid = strtoll(parse, &endp, 16);
-						if (tid == thread_id) {
-							/*
-							 * Special case: only step a single thread (core),
-							 * keep the other threads halted. Currently, only
-							 * aarch64 target understands it. Other target types don't
-							 * care (nobody checks the actual value of 'current')
-							 * and it doesn't really matter. This deserves
-							 * a symbolic constant and a formal interface documentation
-							 * at a later time.
-							 */
-							LOG_DEBUG("request to step current core only");
-							/* uncomment after checking that indeed other targets are safe */
-							/*current_pc = 2;*/
-						}
+					tid = strtoll(parse, NULL, 16);
+					if (tid == thread_id) {
+						/*
+						 * Special case: only step a single thread (core),
+						 * keep the other threads halted. Currently, only
+						 * aarch64 target understands it. Other target types don't
+						 * care (nobody checks the actual value of 'current')
+						 * and it doesn't really matter. This deserves
+						 * a symbolic constant and a formal interface documentation
+						 * at a later time.
+						 */
+						LOG_DEBUG("request to step current core only");
+						/* uncomment after checking that indeed other targets are safe */
+						/*current_pc = 2;*/
 					}
 				}
 			}
+		}
 
-			LOG_DEBUG("target %s single-step thread %"PRIx64, target_name(ct), thread_id);
-			gdb_connection->output_flag = GDB_OUTPUT_ALL;
-			target_call_event_callbacks(ct, TARGET_EVENT_GDB_START);
+		LOG_DEBUG("target %s single-step thread %"PRIx64, target_name(ct), thread_id);
+		gdb_connection->output_flag = GDB_OUTPUT_ALL;
+		target_call_event_callbacks(ct, TARGET_EVENT_GDB_START);
 
-			/*
-			 * work around an annoying gdb behaviour: when the current thread
-			 * is changed in gdb, it assumes that the target can follow and also
-			 * make the thread current. This is an assumption that cannot hold
-			 * for a real target running a multi-threading OS. We just fake
-			 * the step to not trigger an internal error in gdb. See
-			 * https://sourceware.org/bugzilla/show_bug.cgi?id=22925 for details
-			 */
-			if (fake_step) {
-				int sig_reply_len;
-				char sig_reply[128];
+		/*
+		 * work around an annoying gdb behaviour: when the current thread
+		 * is changed in gdb, it assumes that the target can follow and also
+		 * make the thread current. This is an assumption that cannot hold
+		 * for a real target running a multi-threading OS. We just fake
+		 * the step to not trigger an internal error in gdb. See
+		 * https://sourceware.org/bugzilla/show_bug.cgi?id=22925 for details
+		 */
+		if (fake_step) {
+			int sig_reply_len;
+			char sig_reply[128];
 
-				LOG_DEBUG("fake step thread %"PRIx64, thread_id);
+			LOG_DEBUG("fake step thread %"PRIx64, thread_id);
 
-				sig_reply_len = snprintf(sig_reply, sizeof(sig_reply),
-										 "T05thread:%016"PRIx64";", thread_id);
+			sig_reply_len = snprintf(sig_reply, sizeof(sig_reply),
+									"T05thread:%016"PRIx64";", thread_id);
 
-				gdb_put_packet(connection, sig_reply, sig_reply_len);
-				gdb_connection->output_flag = GDB_OUTPUT_NO;
+			gdb_put_packet(connection, sig_reply, sig_reply_len);
+			gdb_connection->output_flag = GDB_OUTPUT_NO;
 
-				return true;
-			}
+			return true;
+		}
 
-			/* support for gdb_sync command */
-			if (gdb_connection->sync) {
-				gdb_connection->sync = false;
-				if (ct->state == TARGET_HALTED) {
-					LOG_DEBUG("stepi ignored. GDB will now fetch the register state "
-									"from the target.");
-					gdb_sig_halted(connection);
-					gdb_connection->output_flag = GDB_OUTPUT_NO;
-				} else
-					gdb_connection->frontend_state = TARGET_RUNNING;
-				return true;
-			}
-
-			retval = target_step(ct, current_pc, 0, 0);
-			if (retval == ERROR_TARGET_NOT_HALTED)
-				LOG_INFO("target %s was not halted when step was requested", target_name(ct));
-
-			/* if step was successful send a reply back to gdb */
-			if (retval == ERROR_OK) {
-				retval = target_poll(ct);
-				if (retval != ERROR_OK)
-					LOG_DEBUG("error polling target %s after successful step", target_name(ct));
-				/* send back signal information */
-				gdb_signal_reply(ct, connection);
-				/* stop forwarding log packets! */
+		/* support for gdb_sync command */
+		if (gdb_connection->sync) {
+			gdb_connection->sync = false;
+			if (ct->state == TARGET_HALTED) {
+				LOG_DEBUG("stepi ignored. GDB will now fetch the register state "
+								"from the target.");
+				gdb_sig_halted(connection);
 				gdb_connection->output_flag = GDB_OUTPUT_NO;
 			} else
 				gdb_connection->frontend_state = TARGET_RUNNING;
-		} else {
-			LOG_ERROR("Unknown vCont packet");
-			return false;
+			return true;
 		}
+
+		retval = target_step(ct, current_pc, 0, 0);
+		if (retval == ERROR_TARGET_NOT_HALTED)
+			LOG_INFO("target %s was not halted when step was requested", target_name(ct));
+
+		/* if step was successful send a reply back to gdb */
+		if (retval == ERROR_OK) {
+			retval = target_poll(ct);
+			if (retval != ERROR_OK)
+				LOG_DEBUG("error polling target %s after successful step", target_name(ct));
+			/* send back signal information */
+			gdb_signal_reply(ct, connection);
+			/* stop forwarding log packets! */
+			gdb_connection->output_flag = GDB_OUTPUT_NO;
+		} else
+			gdb_connection->frontend_state = TARGET_RUNNING;
 		return true;
 	}
-
+	LOG_ERROR("Unknown vCont packet");
 	return false;
 }
 
@@ -3452,9 +3524,10 @@ static int gdb_input_inner(struct connection *connection)
 		/* terminate with zero */
 		gdb_packet_buffer[packet_size] = '\0';
 
-		gdb_log_incoming_packet(gdb_packet_buffer);
-
 		if (packet_size > 0) {
+
+			gdb_log_incoming_packet(connection, gdb_packet_buffer);
+
 			retval = ERROR_OK;
 			switch (packet[0]) {
 				case 'T':	/* Is thread alive? */
@@ -3599,12 +3672,14 @@ static int gdb_input_inner(struct connection *connection)
 					break;
 
 				case 'j':
+					/* DEPRECATED */
 					/* packet supported only by smp target i.e cortex_a.c*/
 					/* handle smp packet replying coreid played to gbd */
 					gdb_read_smp_packet(connection, packet, packet_size);
 					break;
 
 				case 'J':
+					/* DEPRECATED */
 					/* packet supported only by smp target i.e cortex_a.c */
 					/* handle smp packet setting coreid to be played at next
 					 * resume to gdb */

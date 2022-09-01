@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -16,19 +18,6 @@
  *                                                                         *
  *   Copyright (C) 2019 by Tomas Vanek                                     *
  *   vanekt@fbl.cz                                                         *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  *                                                                         *
  *   ARMv7-M Architecture, Application Level Reference Manual              *
  *              ARM DDI 0405C (September 2008)                             *
@@ -865,6 +854,7 @@ int armv7m_init_arch_info(struct target *target, struct armv7m_common *armv7m)
 	/* Enable stimulus port #0 by default */
 	armv7m->trace_config.itm_ter[0] = 1;
 
+	arm->core_state = ARM_STATE_THUMB;
 	arm->core_type = ARM_CORE_TYPE_M_PROFILE;
 	arm->arch_info = armv7m;
 	arm->setup_semihosting = armv7m_setup_semihosting;
@@ -1095,7 +1085,11 @@ int armv7m_maybe_skip_bkpt_inst(struct target *target, bool *inst_found)
 
 const struct command_registration armv7m_command_handlers[] = {
 	{
-		.chain = arm_command_handlers,
+		.name = "arm",
+		.mode = COMMAND_ANY,
+		.help = "ARM command group",
+		.usage = "",
+		.chain = arm_all_profiles_command_handlers,
 	},
 	COMMAND_REGISTRATION_DONE
 };

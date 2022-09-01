@@ -1,22 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2013 by Paul Fertser, fercerpav@gmail.com               *
  *                                                                         *
  *   Copyright (C) 2012 by Creative Product Design, marc @ cpdesign.com.au *
  *   Based on at91rm9200.c (c) Anders Larsen                               *
  *   and RPi GPIO examples by Gert van Loo & Dom                           *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -94,6 +83,11 @@ static int speed_coeff = 113714;
 static int speed_offset = 28;
 static unsigned int jtag_delay;
 
+static int is_gpio_valid(int gpio)
+{
+	return gpio >= 0 && gpio <= 31;
+}
+
 static bb_value_t bcm2835gpio_read(void)
 {
 	return (GPIO_LEV & 1<<tdo_gpio) ? BB_HIGH : BB_LOW;
@@ -133,12 +127,12 @@ static int bcm2835gpio_reset(int trst, int srst)
 	uint32_t set = 0;
 	uint32_t clear = 0;
 
-	if (trst_gpio > 0) {
+	if (is_gpio_valid(trst_gpio)) {
 		set |= !trst<<trst_gpio;
 		clear |= trst<<trst_gpio;
 	}
 
-	if (srst_gpio > 0) {
+	if (is_gpio_valid(srst_gpio)) {
 		set |= !srst<<srst_gpio;
 		clear |= srst<<srst_gpio;
 	}
@@ -151,7 +145,7 @@ static int bcm2835gpio_reset(int trst, int srst)
 
 static void bcm2835_swdio_drive(bool is_output)
 {
-	if (swdio_dir_gpio > 0) {
+	if (is_gpio_valid(swdio_dir_gpio)) {
 		if (is_output) {
 			GPIO_SET = 1 << swdio_dir_gpio;
 			OUT_GPIO(swdio_gpio);
@@ -194,11 +188,6 @@ static int bcm2835gpio_speed(int speed)
 {
 	jtag_delay = speed;
 	return ERROR_OK;
-}
-
-static int is_gpio_valid(int gpio)
-{
-	return gpio >= 0 && gpio <= 31;
 }
 
 COMMAND_HANDLER(bcm2835gpio_handle_jtag_gpionums)
@@ -557,7 +546,7 @@ static int bcm2835gpio_init(void)
 		OUT_GPIO(tck_gpio);
 		OUT_GPIO(tms_gpio);
 
-		if (trst_gpio != -1) {
+		if (is_gpio_valid(trst_gpio)) {
 			trst_gpio_mode = MODE_GPIO(trst_gpio);
 			GPIO_SET = 1 << trst_gpio;
 			OUT_GPIO(trst_gpio);
@@ -565,6 +554,13 @@ static int bcm2835gpio_init(void)
 	}
 
 	if (transport_is_swd()) {
+		/* Make buffer an output before the GPIO connected to it */
+		if (is_gpio_valid(swdio_dir_gpio)) {
+			swdio_dir_gpio_mode = MODE_GPIO(swdio_dir_gpio);
+			GPIO_SET = 1 << swdio_dir_gpio;
+			OUT_GPIO(swdio_dir_gpio);
+		}
+
 		swclk_gpio_mode = MODE_GPIO(swclk_gpio);
 		swdio_gpio_mode = MODE_GPIO(swdio_gpio);
 
@@ -574,16 +570,10 @@ static int bcm2835gpio_init(void)
 		OUT_GPIO(swdio_gpio);
 	}
 
-	if (srst_gpio != -1) {
+	if (is_gpio_valid(srst_gpio)) {
 		srst_gpio_mode = MODE_GPIO(srst_gpio);
 		GPIO_SET = 1 << srst_gpio;
 		OUT_GPIO(srst_gpio);
-	}
-
-	if (swdio_dir_gpio != -1) {
-		swdio_dir_gpio_mode = MODE_GPIO(swdio_dir_gpio);
-		GPIO_SET = 1 << swdio_dir_gpio;
-		OUT_GPIO(swdio_dir_gpio);
 	}
 
 	LOG_DEBUG("saved pinmux settings: tck %d tms %d tdi %d "
@@ -600,7 +590,7 @@ static int bcm2835gpio_quit(void)
 		SET_MODE_GPIO(tdi_gpio, tdi_gpio_mode);
 		SET_MODE_GPIO(tck_gpio, tck_gpio_mode);
 		SET_MODE_GPIO(tms_gpio, tms_gpio_mode);
-		if (trst_gpio != -1)
+		if (is_gpio_valid(trst_gpio))
 			SET_MODE_GPIO(trst_gpio, trst_gpio_mode);
 	}
 
@@ -609,10 +599,10 @@ static int bcm2835gpio_quit(void)
 		SET_MODE_GPIO(swdio_gpio, swdio_gpio_mode);
 	}
 
-	if (srst_gpio != -1)
+	if (is_gpio_valid(srst_gpio))
 		SET_MODE_GPIO(srst_gpio, srst_gpio_mode);
 
-	if (swdio_dir_gpio != -1)
+	if (is_gpio_valid(swdio_dir_gpio))
 		SET_MODE_GPIO(swdio_dir_gpio, swdio_dir_gpio_mode);
 
 	return ERROR_OK;

@@ -10,7 +10,10 @@ struct riscv_program;
 #include "gdb_regs.h"
 #include "jtag/jtag.h"
 #include "target/register.h"
+#include "target/semihosting_common.h"
 #include <helper/command.h>
+
+#define RISCV_COMMON_MAGIC	0x52495356U
 
 /* The register cache is statically allocated. */
 #define RISCV_MAX_HARTS 1024
@@ -84,7 +87,9 @@ typedef struct {
 	char *name;
 } range_list_t;
 
-typedef struct {
+struct riscv_info {
+	unsigned int common_magic;
+
 	unsigned dtm_version;
 
 	struct command_context *cmd_ctx;
@@ -117,9 +122,6 @@ typedef struct {
 
 	/* The number of entries in the debug buffer. */
 	int debug_buffer_size;
-
-	/* This avoids invalidating the register cache too often. */
-	bool registers_initialized;
 
 	/* This hart contains an implicit ebreak at the end of the program buffer. */
 	bool impebreak;
@@ -227,7 +229,7 @@ typedef struct {
 
 	riscv_sample_config_t sample_config;
 	struct riscv_sample_buf sample_buf;
-} riscv_info_t;
+};
 
 COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
 			   unsigned int value);
@@ -263,13 +265,18 @@ extern bool riscv_ebreaku;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
  * that provides that. */
-static inline riscv_info_t *riscv_info(const struct target *target) __attribute__((unused));
-static inline riscv_info_t *riscv_info(const struct target *target)
+static inline struct riscv_info *riscv_info(const struct target *target) __attribute__((unused));
+static inline struct riscv_info *riscv_info(const struct target *target)
 {
 	assert(target->arch_info);
 	return target->arch_info;
 }
-#define RISCV_INFO(R) riscv_info_t *R = riscv_info(target);
+#define RISCV_INFO(R) struct riscv_info *R = riscv_info(target);
+
+static inline bool is_riscv(const struct riscv_info *riscv_info)
+{
+	return riscv_info->common_magic == RISCV_COMMON_MAGIC;
+}
 
 extern uint8_t ir_dtmcontrol[4];
 extern struct scan_field select_dtmcontrol;
@@ -315,7 +322,7 @@ int riscv_openocd_deassert_reset(struct target *target);
 /*** RISC-V Interface ***/
 
 /* Initializes the shared RISC-V structure. */
-void riscv_info_init(struct target *target, riscv_info_t *r);
+void riscv_info_init(struct target *target, struct riscv_info *r);
 
 /* Steps the hart that's currently selected in the RTOS, or if there is no RTOS
  * then the only hart. */
@@ -380,13 +387,8 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_wp_addre
 int riscv_init_registers(struct target *target);
 
 void riscv_semihosting_init(struct target *target);
-typedef enum {
-	SEMI_NONE,		/* Not halted for a semihosting call. */
-	SEMI_HANDLED,	/* Call handled, and target was resumed. */
-	SEMI_WAITING,	/* Call handled, target is halted waiting until we can resume. */
-	SEMI_ERROR		/* Something went wrong. */
-} semihosting_result_t;
-semihosting_result_t riscv_semihosting(struct target *target, int *retval);
+
+enum semihosting_result riscv_semihosting(struct target *target, int *retval);
 
 void riscv_add_bscan_tunneled_scan(struct target *target, struct scan_field *field,
 		riscv_bscan_tunneled_scan_context_t *ctxt);

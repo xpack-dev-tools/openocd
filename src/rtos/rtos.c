@@ -1,19 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2011 by Broadcom Corporation                            *
  *   Evan Hunter - ehunter@broadcom.com                                    *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -140,6 +129,9 @@ int rtos_create(struct jim_getopt_info *goi, struct target *target)
 	if (e != JIM_OK)
 		return e;
 
+	if (strcmp(cp, "none") == 0)
+		return JIM_OK;
+
 	if (strcmp(cp, "auto") == 0) {
 		/* Auto detect tries to look up all symbols for each RTOS,
 		 * and runs the RTOS driver's _detect() function when GDB
@@ -159,7 +151,7 @@ int rtos_create(struct jim_getopt_info *goi, struct target *target)
 	res = Jim_GetResult(goi->interp);
 	for (x = 0; rtos_types[x]; x++)
 		Jim_AppendStrings(goi->interp, res, rtos_types[x]->name, ", ", NULL);
-	Jim_AppendStrings(goi->interp, res, " or auto", NULL);
+	Jim_AppendStrings(goi->interp, res, ", auto or none", NULL);
 
 	return JIM_ERR;
 }

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -7,19 +9,6 @@
  *                                                                         *
  *   Copyright (C) 2008 by Spencer Oliver                                  *
  *   spen@spen-soft.co.uk                                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  *                                                                         *
  *                                                                         *
  *   Cortex-M3(tm) TRM, ARM DDI 0337E (r1p1) and 0337G (r2p0)              *
@@ -663,6 +652,11 @@ static int cortex_m_endreset_event(struct target *target)
 
 	register_cache_invalidate(armv7m->arm.core_cache);
 
+	/* TODO: invalidate also working areas (needed in the case of detected reset).
+	 * Doing so will require flash drivers to test if working area
+	 * is still valid in all target algo calling loops.
+	 */
+
 	/* make sure we have latest dhcsr flags */
 	retval = cortex_m_read_dhcsr_atomic_sticky(target);
 	if (retval != ERROR_OK)
@@ -878,6 +872,16 @@ static int cortex_m_poll(struct target *target)
 	enum target_state prev_target_state = target->state;
 	struct cortex_m_common *cortex_m = target_to_cm(target);
 	struct armv7m_common *armv7m = &cortex_m->armv7m;
+
+	/* Check if debug_ap is available to prevent segmentation fault.
+	 * If the re-examination after an error does not find a MEM-AP
+	 * (e.g. the target stopped communicating), debug_ap pointer
+	 * can suddenly become NULL.
+	 */
+	if (!armv7m->debug_ap) {
+		target->state = TARGET_UNKNOWN;
+		return ERROR_TARGET_NOT_EXAMINED;
+	}
 
 	/* Read from Debug Halting Control and Status Register */
 	retval = cortex_m_read_dhcsr_atomic_sticky(target);
@@ -1984,6 +1988,10 @@ static int cortex_m_init_target(struct command_context *cmd_ctx,
 void cortex_m_deinit_target(struct target *target)
 {
 	struct cortex_m_common *cortex_m = target_to_cm(target);
+	struct armv7m_common *armv7m = target_to_armv7m(target);
+
+	if (!armv7m->is_hla_target && armv7m->debug_ap)
+		dap_put_ap(armv7m->debug_ap);
 
 	free(cortex_m->fp_comparator_list);
 
@@ -2262,10 +2270,10 @@ static void cortex_m_dwt_free(struct target *target)
 static int cortex_m_find_mem_ap(struct adiv5_dap *swjdp,
 		struct adiv5_ap **debug_ap)
 {
-	if (dap_find_ap(swjdp, AP_TYPE_AHB3_AP, debug_ap) == ERROR_OK)
+	if (dap_find_get_ap(swjdp, AP_TYPE_AHB3_AP, debug_ap) == ERROR_OK)
 		return ERROR_OK;
 
-	return dap_find_ap(swjdp, AP_TYPE_AHB5_AP, debug_ap);
+	return dap_find_get_ap(swjdp, AP_TYPE_AHB5_AP, debug_ap);
 }
 
 int cortex_m_examine(struct target *target)
@@ -2279,6 +2287,11 @@ int cortex_m_examine(struct target *target)
 	/* hla_target shares the examine handler but does not support
 	 * all its calls */
 	if (!armv7m->is_hla_target) {
+		if (armv7m->debug_ap) {
+			dap_put_ap(armv7m->debug_ap);
+			armv7m->debug_ap = NULL;
+		}
+
 		if (cortex_m->apsel == DP_APSEL_INVALID) {
 			/* Search for the MEM-AP */
 			retval = cortex_m_find_mem_ap(swjdp, &armv7m->debug_ap);
@@ -2287,7 +2300,11 @@ int cortex_m_examine(struct target *target)
 				return retval;
 			}
 		} else {
-			armv7m->debug_ap = dap_ap(swjdp, cortex_m->apsel);
+			armv7m->debug_ap = dap_get_ap(swjdp, cortex_m->apsel);
+			if (!armv7m->debug_ap) {
+				LOG_ERROR("Cannot get AP");
+				return ERROR_FAIL;
+			}
 		}
 
 		armv7m->debug_ap->memaccess_tck = 8;
@@ -2384,6 +2401,20 @@ int cortex_m_examine(struct target *target)
 		retval = target_read_u32(target, DCB_DHCSR, &cortex_m->dcb_dhcsr);
 		if (retval != ERROR_OK)
 			return retval;
+
+		/*  Don't cumulate sticky S_RESET_ST at the very first read of DHCSR
+		 *  as S_RESET_ST may indicate a reset that happened long time ago
+		 *  (most probably the power-on reset before OpenOCD was started).
+		 *  As we are just initializing the debug system we do not need
+		 *  to call cortex_m_endreset_event() in the following poll.
+		 */
+		if (!cortex_m->dcb_dhcsr_sticky_is_recent) {
+			cortex_m->dcb_dhcsr_sticky_is_recent = true;
+			if (cortex_m->dcb_dhcsr & S_RESET_ST) {
+				LOG_TARGET_DEBUG(target, "reset happened some time ago, ignore");
+				cortex_m->dcb_dhcsr &= ~S_RESET_ST;
+			}
+		}
 		cortex_m_cumulate_dhcsr_sticky(cortex_m, cortex_m->dcb_dhcsr);
 
 		if (!(cortex_m->dcb_dhcsr & C_DEBUGEN)) {
